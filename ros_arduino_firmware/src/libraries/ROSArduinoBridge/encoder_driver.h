@@ -18,3 +18,7 @@ long readEncoder(int i);
 void resetEncoder(int i);
 void resetEncoders();
 
+#if defined SPARKFUN_REDBOT_ENCODER
+void setDir(int i, char dir);
+#endif
+

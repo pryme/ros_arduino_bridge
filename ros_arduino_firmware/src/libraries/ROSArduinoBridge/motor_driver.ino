@@ -55,6 +55,33 @@
     setMotorSpeed(LEFT, leftSpeed);
     setMotorSpeed(RIGHT, rightSpeed);
   }
+#elif defined POLOLU_DRV8835
+  /* Include the Pololu library */
+  #include "DRV8835MotorShield.h"
+
+  /* Create the motor driver object */
+  DRV8835MotorShield drive;
+
+  /* Wrap the motor driver initialization */
+  void initMotorController() {
+    // Nothing to do
+  }
+
+  /* Wrap the drive motor set speed function */
+  void setMotorSpeed(int i, int spd) {
+#if defined SPARKFUN_REDBOT_ENCODER
+    setDir(i, (spd < 0) ? -1 : 1);
+#endif
+
+    if (i == LEFT) drive.setM1Speed(spd);
+    else drive.setM2Speed(spd);
+  }
+
+  // A convenience function for setting both motor speeds
+  void setMotorSpeeds(int leftSpeed, int rightSpeed) {
+    setMotorSpeed(LEFT, leftSpeed);
+    setMotorSpeed(RIGHT, rightSpeed);
+  }
 #else
   #error A motor driver must be selected!
 #endif

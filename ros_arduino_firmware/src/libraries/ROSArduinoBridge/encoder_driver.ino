@@ -68,6 +68,40 @@
       return;
     }
   }
+#elif defined SPARKFUN_REDBOT_ENCODER
+#include "RedBot.h"
+
+RedBotEncoder *encoder = new RedBotEncoder(A0, A1);
+
+long readEncoder(int i) {
+  if (i == LEFT) {
+    return encoder->getTicks(WHEEL_LEFT);
+  }
+  else if (i == RIGHT) {
+    return encoder->getTicks(WHEEL_RIGHT);
+  }
+
+  return 0;
+}
+
+void resetEncoder(int i) {
+  if (i == LEFT) {
+    encoder->clearEnc(WHEEL_LEFT);
+  }
+  else if (i == RIGHT) {
+    encoder->clearEnc(WHEEL_RIGHT);
+  }
+}
+
+void setDir(int i, char dir) {
+  if (i == LEFT) {
+    encoder->setDir(WHEEL_LEFT, dir);
+  }
+  else if (i == RIGHT) {
+    encoder->setDir(WHEEL_RIGHT, dir);
+  }
+}
+
 #else
   #error A encoder driver must be selected!
 #endif

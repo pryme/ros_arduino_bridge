@@ -45,32 +45,43 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-//#define USE_BASE      // Enable the base controller code
-#undef USE_BASE     // Disable the base controller code
+#define USE_BASE      // Enable the base controller code
+//#undef USE_BASE     // Disable the base controller code
 
 /* Define the motor controller and encoder library you are using */
 #ifdef USE_BASE
    /* The Pololu VNH5019 dual motor driver shield */
-   #define POLOLU_VNH5019
+   //#define POLOLU_VNH5019
 
    /* The Pololu MC33926 dual motor driver shield */
    //#define POLOLU_MC33926
 
+   /* The Pololu DRV8835 dual motor driver shield */
+   #define POLOLU_DRV8835
+
    /* The RoboGaia encoder shield */
-   #define ROBOGAIA
+   //#define ROBOGAIA
    
    /* Encoders directly attached to Arduino board */
    //#define ARDUINO_ENC_COUNTER
+
+   /* The RedBot encoder */
+   #define SPARKFUN_REDBOT_ENCODER
 #endif
 
-#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
-//#undef USE_SERVOS     // Disable use of PWM servos
+//#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
+#undef USE_SERVOS     // Disable use of PWM servos
 
 /* Serial port baud rate */
-#define BAUDRATE     57600
+#define BAUDRATE     115200
 
 /* Maximum PWM signal */
 #define MAX_PWM        255
+
+/* MARCO: The POLOLU_DRV8835 has a range +/- 400, but I'm running 6V motors
+   on 7.4V batteries, so I limit it here to 6/7.4 * 400
+*/
+#define MAX_PWM        325
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -83,6 +94,10 @@
 
 /* Sensor functions */
 #include "sensors.h"
+
+#if defined(SPARKFUN_REDBOT_ENCODER)
+#include "RedBot.h"
+#endif
 
 /* Include servo support if required */
 #ifdef USE_SERVOS
