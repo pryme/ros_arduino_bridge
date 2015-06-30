@@ -1,13 +1,13 @@
 /* *************************************************************
    Encoder driver function definitions - by James Nugen
    
-   Modified by PR:  2015-5-9
+   Modified by PR;  2015-5-9
    ************************************************************ */
    
-
+   
 #ifndef ENCODER_DRIVER_H
 #define ENCODER_DRIVER_H
-   
+
 #ifdef ARDUINO_ENC_COUNTER
   //below can be changed, but should be PORTD pins; 
   //otherwise additional changes in the code are required
@@ -28,8 +28,10 @@
 long readEncoder(int i);
 void resetEncoder(int i);
 void resetEncoders();
-unsigned long readEncoderInterval(int i);
+long readEncoderInterval(int i);
 boolean isFreshEncoderInterval(int i);
 void initEncoders();
+
+// TODO:  review if I declared all new functions
 
 #endif

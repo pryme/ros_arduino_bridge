@@ -44,27 +44,38 @@
     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
+ /*************************************************************
+ *
+ * Modified by PR: 2015-5-9
+ *
+ **************************************************************/
 
-//#define USE_BASE      // Enable the base controller code
-#undef USE_BASE     // Disable the base controller code
+#define USE_BASE      // Enable the base controller code
+//#undef USE_BASE     // Disable the base controller code
 
 /* Define the motor controller and encoder library you are using */
 #ifdef USE_BASE
    /* The Pololu VNH5019 dual motor driver shield */
-   #define POLOLU_VNH5019
+   //#define POLOLU_VNH5019
 
    /* The Pololu MC33926 dual motor driver shield */
    //#define POLOLU_MC33926
 
+   /* the PR Teensy motor driver */
+   #define PR_TEENSY_MOTOR_DRIVER
+   
    /* The RoboGaia encoder shield */
-   #define ROBOGAIA
+   //#define ROBOGAIA
    
    /* Encoders directly attached to Arduino board */
    //#define ARDUINO_ENC_COUNTER
+   
+   /* The PR Teensy encoders */
+   #define PR_TEENSY_ENC_COUNTER
 #endif
 
-#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
-//#undef USE_SERVOS     // Disable use of PWM servos
+//#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
+#undef USE_SERVOS     // Disable use of PWM servos
 
 /* Serial port baud rate */
 #define BAUDRATE     57600
@@ -98,10 +109,16 @@
   #include "encoder_driver.h"
 
   /* PID parameters and functions */
-  #include "diff_controller.h"
+  //#include "diff_controller.h"
+  //#include "PR_diff_controller.h"
+  //#include "Outline_4_no_ptr_or_ref.h"
+  
 
   /* Run the PID loop at 30 times per second */
-  #define PID_RATE           30     // Hz
+  //#define PID_RATE           30     // Hz
+  #define PID_RATE           100     // Hz
+  // TODO:  I think I may need to define this as 100 Hz so that I get updates every dt interval
+  // I believe this helps avoid hesitation when starting from stop
 
   /* Convert the rate into an interval */
   const int PID_INTERVAL = 1000 / PID_RATE;
@@ -111,8 +128,16 @@
 
   /* Stop the robot if it hasn't received a movement command
    in this number of milliseconds */
+  
   #define AUTO_STOP_INTERVAL 2000
+  
+  // TODO:  PR changed AUTO_STOP_INTERVAL from 2000; 
+ 
+  
   long lastMotorCommand = AUTO_STOP_INTERVAL;
+   #include "Outline_6_no_class_long_math.h" 
+ 
+  
 #endif
 
 /* Variable initialization */
@@ -184,11 +209,11 @@ int runCommand() {
     break;
 #ifdef USE_SERVOS
   case SERVO_WRITE:
-    servos[arg1].setTargetPosition(arg2);
+    servos[arg1].write(arg2);
     Serial.println("OK");
     break;
   case SERVO_READ:
-    Serial.println(servos[arg1].getServo().read());
+    Serial.println(servos[arg1].read());
     break;
 #endif
     
@@ -236,6 +261,7 @@ int runCommand() {
 /* Setup function--runs once at startup. */
 void setup() {
   Serial.begin(BAUDRATE);
+  // TODO:  make serial easily switchable (debug)?
 
 // Initialize the motor controller if used */
 #ifdef USE_BASE
@@ -260,20 +286,22 @@ void setup() {
     // enable PCINT1 and PCINT2 interrupt in the general interrupt mask
     PCICR |= (1 << PCIE1) | (1 << PCIE2);
   #endif
+  
+  #ifdef PR_TEENSY_ENC_COUNTER
+    initEncoders();  // initialize PR encoders
+  #endif
+  
   initMotorController();
   resetPID();
 #endif
 
 /* Attach servos if used */
-  #ifdef USE_SERVOS
-    int i;
-    for (i = 0; i < N_SERVOS; i++) {
-      servos[i].initServo(
-          servoPins[i],
-          stepDelay[i],
-          servoInitPosition[i]);
-    }
-  #endif
+#ifdef USE_SERVOS
+  int i;
+  for (i = 0; i < N_SERVOS; i++) {
+    servos[i].attach(servoPins[i]);
+  }
+#endif
 }
 
 /* Enter the main loop.  Read and parse input from the serial port
@@ -333,14 +361,12 @@ void loop() {
     setMotorSpeeds(0, 0);
     moving = 0;
   }
-#endif
 
-// Sweep servos
-#ifdef USE_SERVOS
-  int i;
-  for (i = 0; i < N_SERVOS; i++) {
-    servos[i].doSweep();
-  }
 #endif
 }
+
+
+
+
+
 
