@@ -72,8 +72,8 @@ void resetEncoder(int i) {
 }
 
 #elif defined PR_TEENSY_ENC_COUNTER
-volatile boolean EL_isFresh = true;  // flag fresh interval value from left enc interrupt
-volatile boolean ER_isFresh = true;    
+volatile boolean EL_isFresh = false;  // flag fresh interval value from left enc interrupt
+volatile boolean ER_isFresh = false;    
 volatile long EL_last_interval = 0;  // most recent interval (us), left encoder
 volatile long ER_last_interval = 0;  
 volatile boolean EL_keep = false; // flag to save only every other micros count

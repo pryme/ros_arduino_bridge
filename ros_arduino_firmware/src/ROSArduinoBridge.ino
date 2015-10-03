@@ -129,14 +129,15 @@
   /* Stop the robot if it hasn't received a movement command
    in this number of milliseconds */
   
-  #define AUTO_STOP_INTERVAL 2000
+  #define AUTO_STOP_INTERVAL 3000
   
   // TODO:  PR changed AUTO_STOP_INTERVAL from 2000; 
  
   
   long lastMotorCommand = AUTO_STOP_INTERVAL;
-   #include "Outline_6_no_class_long_math.h" 
- 
+  
+//   #include "Outline_6_no_class_long_math.h" 
+  #include "my_diff_controller.h"
   
 #endif
 

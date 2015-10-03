@@ -60,7 +60,7 @@
 #define PR_diff_controller_h
 
 /* enable 'if (DEBUG) Serial.println();' or similar */
-#define DEBUG (1==0)
+#define DEBUG (1==1)
 /* enable manual start button for untethered op (should disable DEBUG too) */
 #define MANUAL (1==0)
 //#define AUTO_STOP_INTERVAL 4000
@@ -182,20 +182,20 @@ void doPID(PIDData *pid) {  // would a ref be better than ptr?
     if (DEBUG) {  
       //Serial.print("error_old1= "); Serial.print(pid->error_old1);
       //Serial.print("; error(k)= "); Serial.print(pid->error / kMult);
-      Serial.print("; leftPID.pv0= "); Serial.print(pid->pv);  Serial.println("");
-      Serial.print("; motor_dir0= "); Serial.print(pid->motor_dir);
+      //Serial.print("; leftPID.pv0= "); Serial.print(pid->pv);  Serial.println("");
+      //Serial.print("; motor_dir0= "); Serial.print(pid->motor_dir);
     }
     pid->error_old1 = pid->error;  // save prev value
     pid->sp = ((2L * 1000000L) / pid->TargetTicksPerFrame) * kMult;  // serial can chg TTPF
     if (pid->TargetTicksPerFrame > 0) {  // keep track of commanded direction
         pid->motor_dir = 1;
         if (DEBUG){
-            //Serial.print("; setg motor_dir to +1 ");
+            Serial.print("; setg motor_dir to +1 ");
         }
     } else {
             pid->motor_dir = -1;
         if (DEBUG){
-            //Serial.print("; setg motor_dir to -1 ");
+           Serial.print("; setg motor_dir to -1 ");
         }
         }
     if (DEBUG) {    
@@ -206,7 +206,7 @@ void doPID(PIDData *pid) {  // would a ref be better than ptr?
     pid->error = pid->sp - pid->pv;    
     if (DEBUG) {
       //Serial.print("; error_old1(k)= "); Serial.print(pid->error_old1 / kMult);
-      Serial.print("; error(k)= "); Serial.print(pid->error / kMult);
+      //Serial.print("; error(k)= "); Serial.print(pid->error / kMult);
     }
     long a_term = ((1 + dt_mid / tau_i) * pid->error) / Ko;
     if (DEBUG) {
@@ -220,7 +220,7 @@ void doPID(PIDData *pid) {  // would a ref be better than ptr?
     if (DEBUG) {
       //Serial.print("; c_term= "); Serial.print(c_term);
     }
-    long d_term = (2 * pid->pv_old1 - pid->pv_old1) * (tau_d / dt_mid) / Ko;
+    long d_term = (2 * pid->pv_old1 - pid->pv_old2) * (tau_d / dt_mid) / Ko;
     if (DEBUG) {
       //Serial.print("; d_term= "); Serial.print(d_term);
     }
@@ -228,14 +228,14 @@ void doPID(PIDData *pid) {  // would a ref be better than ptr?
     if (controller_reversed) {co_delta = 0L - co_delta;}
     if (DEBUG) {
       //Serial.print("; co_delta= "); Serial.print(co_delta);
-      Serial.print("; co_delta(k)= "); Serial.print(co_delta / kMult);
+      //Serial.print("; co_delta(k)= "); Serial.print(co_delta / kMult);
     }
     pid->co += (co_delta / kMult);  // return to native scale
     if (DEBUG) {   
       //Serial.print("; TTPF= "); Serial.print(pid->TargetTicksPerFrame);
-      Serial.print("; sp(k)= "); Serial.print(pid->sp / kMult);
+      //Serial.print("; sp(k)= "); Serial.print(pid->sp / kMult);
       //Serial.print("; motor_dir doPID 'done' = "); Serial.print(pid->motor_dir);    
-      Serial.print("; co= "); Serial.println(pid->co);
+      //Serial.print("; co= "); Serial.println(pid->co);
     }
     if (pid->co > kMaxPWM) {  // limit to max possible output
       pid->co = kMaxPWM;
@@ -243,7 +243,7 @@ void doPID(PIDData *pid) {  // would a ref be better than ptr?
       pid->co = kMinPWM;
     }
     if (DEBUG) {
-        Serial.print("; pid->co final= ");  Serial.print(pid->co);
+        //Serial.print("; pid->co final= ");  Serial.print(pid->co);
     }
 }  // end doPID
 
@@ -279,7 +279,42 @@ void updatePID(void){
     if (moving && PIDs_are_reset) {  // we're just starting
         // set max to overcome stiction
         // using TTPF just to get direction correct (motor_dir isn't set yet).
-        setMotorSpeeds(leftPID.TargetTicksPerFrame * kMaxPWM, rightPID.TargetTicksPerFrame * kMaxPWM);
+        switch (leftPID.TargetTicksPerFrame > 0){
+            case true:
+                switch(rightPID.TargetTicksPerFrame > 0){
+                    case true:
+                        setMotorSpeeds(kMaxPWM, kMaxPWM);
+                        if (DEBUG){
+                            Serial.println("Started ++");
+                        }
+                        break;
+                    case false:
+                        setMotorSpeeds(kMaxPWM, kMinPWM);
+                        if (DEBUG){
+                            Serial.println("Started +-");
+                        }
+                        break;
+                }
+                break;
+            case false:
+                switch(rightPID.TargetTicksPerFrame > 0){
+                        case true:
+                            setMotorSpeeds(kMinPWM, kMaxPWM);
+                            if (DEBUG){
+                                Serial.println("Started -+");
+                            }
+                            break;
+                        case false:
+                            setMotorSpeeds(kMinPWM, kMinPWM);
+                            if (DEBUG){
+                                Serial.println("Started --");
+                            }
+                            break;
+                    }
+                break;
+        }
+        // changed line below because arg could overflow 32767
+        // setMotorSpeeds(leftPID.TargetTicksPerFrame * kMaxPWM, rightPID.TargetTicksPerFrame * kMaxPWM);
         PIDs_are_reset = false;
         } 
     digitalWrite(LED_pin, LOW);  // TODO:  temp for manual switch
@@ -288,28 +323,29 @@ void updatePID(void){
       leftPID.pv_old2 = leftPID.pv_old1;  // save prior values
       leftPID.pv_old1 = leftPID.pv;      
       if (DEBUG){
-          Serial.println(" ");
-          Serial.print("; leftPID.motor_dir b4 readE= "); Serial.print(leftPID.motor_dir); 
+          //Serial.println(" ");
+          //Serial.print("; leftPID.motor_dir b4 readE= "); Serial.print(leftPID.motor_dir); 
         //  Serial.print("; leftPID.TTPF b4 readE= "); Serial.print(leftPID.TargetTicksPerFrame);
       }
       cli();  // interrupts off
       leftPID.pv = readEncoderInterval(LEFT);
       sei();  // interrupts on
       if (DEBUG) {
-        Serial.print("; leftPID.pv1= "); Serial.print(leftPID.pv);
-        Serial.print("; leftPID.motor_dir after readE= "); Serial.print(leftPID.motor_dir); 
+        //Serial.print("; leftPID.pv1= "); Serial.print(leftPID.pv);
+        //Serial.print("; leftPID.motor_dir after readE= "); Serial.print(leftPID.motor_dir); 
       }
-      if (leftPID.pv > 100000){leftPID.pv = 100000; }  // avoid overflow
+      // TODO:  removing line below is tentative
+      //if (leftPID.pv > 100000){leftPID.pv = 100000; }  // avoid overflow
       leftPID.pv *= leftPID.motor_dir;  // if rev dir invert the interval value
       leftPID.pv *= kMult;  // scale
       if (DEBUG) {      
-        Serial.print(" leftPID.pv(k)2= "); Serial.print(leftPID.pv / kMult);
+        //Serial.print(" leftPID.pv(k)2= "); Serial.print(leftPID.pv / kMult);
       }
       doPID(&leftPID);  
       setMotorSpeed(LEFT, leftPID.co);
     if (DEBUG) {
-      //Serial.print("; leftPID.co= "); Serial.print(leftPID.co);
-      //Serial.println(" "); 
+      Serial.print("; leftPID.co= "); Serial.print(leftPID.co);
+      Serial.println(" "); 
       //Serial.print("K's:  "); Serial.print(Kp); Serial.print("; ");
       //Serial.print(Ki); Serial.print("; "); Serial.print(Kd);  
       //Serial.print("; ");  Serial.println(Ko);        
@@ -322,7 +358,8 @@ void updatePID(void){
       cli();  // interrupts off
       rightPID.pv = readEncoderInterval(RIGHT);
       sei();  // interrupts on
-      if (rightPID.pv > 100000){rightPID.pv = 100000; }  // avoid overflow
+      // TODO:  removing line below is tentative
+      //if (rightPID.pv > 100000){rightPID.pv = 100000; }  // avoid overflow
       rightPID.pv *= rightPID.motor_dir;  // if rev dir invert the interval value
       rightPID.pv *= kMult;  // scale
       doPID(&rightPID);  
