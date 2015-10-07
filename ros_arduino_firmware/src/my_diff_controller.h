@@ -42,7 +42,6 @@
  * Decide whether to add ADC code for batt voltage here or ROS via sensors;
  * Document changes required to RAB
  * Document the velocity PID algorithm
- * Remove MANUAL code
  *------------------------------------------------------------------*/
 
 
@@ -51,62 +50,56 @@
 
 /* enable 'if (DEBUG) Serial.println();' or similar */
 #define DEBUG (1==1)
-/* enable manual start button for untethered op (should disable DEBUG too) */
-#define MANUAL (1==0)
 
 /* globals declared here */
 const int kMaxPWM = 255;      // hard-code for now
-const int kMinPWM = -255;     // still need for startup case
+const int kMinPWM = -255;     // needed for startup case
 const float kSpdMax = 3.0;    // revs / sec wheel speed
 const float kSpdMin = 0.4;    // revs / sec wheel speed
 const int kEncoderSegs = 48;  // encoder ticks / wheel rev
-unsigned char moving = 0;  // is the base in motion?
+unsigned char moving = 0;  // is base in motion?;  used by RosArduinoBridge.ino
 
 float dt_min = (1000000.0 / kSpdMax / kEncoderSegs * 2.0);  // microsec / double-tick
 float dt_max = (1000000.0 / kSpdMin / kEncoderSegs * 2.0); 
 float dt_mid = (dt_min + dt_max) / 2.0;  // midpoint of dt range
-bool controller_reversed = true;  // true --> control element action is reverse
+bool controller_reversed = true;  // true: higher motor drive DECREASES enc. interval
 int Kp = 10;  // needed for RAB command interface;  
-int Ki = 6;  // TODO:  set default Ki val
+int Ki = 6;  
 int Kd = 0;
 int Ko = 6000;
 float tau_i = 1.0e5;
 float tau_d = 0.0;
 bool PIDs_are_reset = false;  
 
-/* declaring the following temporarily to get on with life */
-int START_pin = PIN_B4;  // push sw to start untethered; TODO:  temp
-boolean isSwitchPressed = false;
-int LED_pin = PIN_D6;  // on-board LED
-
 /* PID data structure for a side (LEFT or RIGHT) */
 typedef struct {
     /* TargetTicksPerFrame - needed public property for RAB interface 
        Name must be exact to support RAB interface.
-       This will be set by serial command.  
-       This will be converted to setpoint value. 
-       Positive values are forward; negative are reverse. */
+       Will be set by serial command.  
+       Will be converted to PID setpoint value. 
+       Positive values drive forward; negative drive reverse. */
     float TargetTicksPerFrame;    // target speed in ticks / second
-    // for the above to work, BaseController.py must be modified in cmdVelCallback().
-    // r_a_b PID_INTERVAL is fixed at 1000/30 Hz ms.
-    float pv;  // process value == current encoder interval (double-tick)
-    // Note process value can ONLY be positive with current encoders.  So need 
-    // to keep track of fwd/rev direction separately.
-    // need to make positive or negative ok;
-    float co;  // controller output == current PWM value in -255 to +255
-    // positive:  fwd;  negative: rev;
-    float sp;  // setpoint value == target encoder interval (double-tick)
+      // for the above to work, BaseController.py must be modified in cmdVelCallback().
+      //TODO:  clarify above comment
+      // r_a_b PID_INTERVAL is fixed at 1000/30 Hz ms.
+    float pv;  // process value: current encoder interval (double-tick)
+      // Note process value can ONLY be positive with current encoders.  So need 
+      // to keep track of fwd/rev direction separately.
+    float co;  // controller output: PWM value in 0 to +255
+      // in this version pv and co are always positive;  direction handled separately
+    float sp;  // setpoint value:  target encoder interval (double-tick)
+      // in this version sp is always positive
     float pv_old1;      // previous pv val
     float pv_old2;      // previous pv_old1 val
-    float error;        // current error val;  don't really need stored?
+    float error;        // current error val
     float error_old1;   // previous error val
     int motor_dir;     // currently commanded motor direction; +1(fwd) or -1(rev)
-    // include k's and tau's?
+    // include k's and tau's so L could have differnt k's than R?
     // TODO: should I include encoder ticks?
 }
 PIDData;
 
-PIDData leftPID, rightPID;  // exact names needed for RAB interface
+PIDData leftPID, rightPID;  // exact names required for RAB interface
 
 /* resetPID ---------------------------------------------------
  * Initializes PID data; called directly by RAB.
@@ -149,11 +142,10 @@ void doPID(PIDData *pid) {
       } else {
           tau_i = 1.0e5;  // arbitrary max
       }
-    
-    // might want to move sp into this section too
         
-    float co_delta = 0.0;  // increment to current co
+    float co_delta = 0.0;  // initialize increment to current co
     float speed;  // positive speed magnitude
+    // need to check every time since TTPF can be changed by serial
     if (pid->TargetTicksPerFrame >= 0) {  
         pid->motor_dir = 1;  // keep track of commanded direction
         speed = pid->TargetTicksPerFrame;
@@ -161,63 +153,41 @@ void doPID(PIDData *pid) {
         pid->motor_dir = -1;
         speed = -pid->TargetTicksPerFrame;  
         }
-    // TODO:  could do above as speed=pid->TTPF*pid->motor_dir...?
-    
-    pid->error_old1 = pid->error;  // save prev value
+        
     pid->sp = ((2.0 * 1000000L) / speed);  // serial can chg TTPF
     
-    pid->error = pid->sp - pid->pv;    
+    pid->error_old1 = pid->error;  // save prev value
+    pid->error = pid->sp - pid->pv;  
+    // below computes various terms in PID algorithm, then combines them    
     float a_term = ((1 + dt_mid / tau_i) * pid->error) / Ko;
     float b_term = (tau_d / dt_mid) * pid->pv / Ko;
     float c_term = a_term - b_term - pid->error_old1 / Ko;
     float d_term = (2 * pid->pv_old1 - pid->pv_old2) * (tau_d / dt_mid) / Ko;
     co_delta = Kp * (c_term + d_term); 
-    if (controller_reversed) {co_delta = 0.0 - co_delta;}  // means rev. action
-    pid->co += co_delta;
+    if (controller_reversed) {co_delta = 0.0 - co_delta;}  // means inverse action
+    pid->co += co_delta;  // adjust the controller output
     if (pid->co > kMaxPWM) {  // limit to max possible output
       pid->co = kMaxPWM;
     } 
-    //if (pid->motor_dir < 0) {  // invert if direction is reverse
-    //    pid->co = -pid->co;  // TODO:  problem with sign?
-    //}
 }  // end doPID
 
 /* updatePID  -------------------------------------------------
-  *   reads encoders, updates PID calcs, sets new motor speeds;
+  *   reads encoders, uses co from doPID to set new motor speeds;
   *   called directly by RAB;
   ------------------------------------------------------------*/
 void updatePID(void){  
-    if (MANUAL) {  // temp for manual start switch  TODO:  remove
-      pinMode(START_pin, INPUT_PULLUP);
-      pinMode(LED_pin, OUTPUT);
-      if (!isSwitchPressed) {
-          if (digitalRead(START_pin) == LOW) {
-              isSwitchPressed = true;
-              digitalWrite(LED_pin, LOW);
-          }
-      }
-      if (isSwitchPressed) {
-        lastMotorCommand = millis(); // TODO:  restore
-        moving = 1;
-        leftPID.TargetTicksPerFrame = 80;
-        rightPID.TargetTicksPerFrame = 120;
-        isSwitchPressed = false;
-      } 
-    }  // end temp for manual start switch 
-    
-    /* If commanded, get motors moving so interrupts can happen */
-    if (!moving) {
+    if (!moving) {   // there's no command to move
         if (!PIDs_are_reset) {resetPID(); }
         return;  // nothing more to do
     }
-    float deadband = 5.0;  // ignore if abs(speed) <= deadband
-    if (moving && PIDs_are_reset) {  // we're just starting
-        // set max to overcome stiction
-        // using TTPF just to get direction correct (motor_dir isn't set yet).
+    
+    /* If commanded and just starting, get motors moving so interrupts can happen */
+    if (moving && PIDs_are_reset) {  // we're just starting;  moving set by RAB
+        float deadband = 5.0;  // ignore if abs(speed) <= deadband
         int left_speed = 0;  // just for starting
         int right_speed = 0;
         if (leftPID.TargetTicksPerFrame > deadband){
-            left_speed = kMaxPWM;
+            left_speed = kMaxPWM;  // set max to overcome stiction
             leftPID.motor_dir = 1;
         } else if (leftPID.TargetTicksPerFrame < -deadband) {
             left_speed = kMinPWM;
@@ -237,14 +207,15 @@ void updatePID(void){
             rightPID.motor_dir = 1;
         }
         setMotorSpeeds(left_speed, right_speed);
-        if (DEBUG){
+      /* TODO:  remove debug code
+      if (DEBUG){
           Serial.print("init spds:  "); Serial.print(left_speed); 
           Serial.print("; "); Serial.println(right_speed);
         }
+      */  
         PIDs_are_reset = false;
         delayMicroseconds(500000);  // time to overcome stiction; was 250k us
-        } 
-    digitalWrite(LED_pin, LOW);  // TODO:  temp for manual switch
+    } 
     
     if (isFreshEncoderInterval(LEFT)){
       leftPID.pv_old2 = leftPID.pv_old1;  // save prior values
@@ -253,16 +224,14 @@ void updatePID(void){
       leftPID.pv = readEncoderInterval(LEFT);
       sei();  // interrupts on
       if (leftPID.pv > 100000){leftPID.pv = 100000; }  // TODO:  is this needed?
-      // leftPID.pv *= leftPID.motor_dir;  // if rev dir invert the interval value
       if (DEBUG) {
-        Serial.print("L DT int (pv): "); Serial.println(leftPID.pv);
+        Serial.print("L DT int (pv): "); Serial.print(leftPID.pv);
       }
-      doPID(&leftPID);  
+      doPID(&leftPID);  // update the PID vals
       setMotorSpeed(LEFT, leftPID.co * leftPID.motor_dir);
       if (DEBUG){
-          //Serial.print("set L M:  "); Serial.println(leftPID.co * leftPID.motor_dir);
+          Serial.print("set L M:  "); Serial.println(leftPID.co * leftPID.motor_dir);
       }
-    
     }
    
    if (isFreshEncoderInterval(RIGHT)){
@@ -272,11 +241,10 @@ void updatePID(void){
       rightPID.pv = readEncoderInterval(RIGHT);
       sei();  // interrupts on
       if (rightPID.pv > 100000){rightPID.pv = 100000; }  // TODO:  is this needed?
-      // rightPID.pv *= rightPID.motor_dir;  // if rev dir invert the interval value
       if (DEBUG) {
         Serial.print("R DT int (pv): "); Serial.print(rightPID.pv);
       }
-      doPID(&rightPID);  
+      doPID(&rightPID);  // update the PID vals
       setMotorSpeed(RIGHT, rightPID.co * rightPID.motor_dir);
       if (DEBUG){
           Serial.print("; set R M:  "); Serial.println(rightPID.co * rightPID.motor_dir);
