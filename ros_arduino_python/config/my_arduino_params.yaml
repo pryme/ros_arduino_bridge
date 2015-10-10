@@ -24,9 +24,9 @@ gear_reduction: 1.0
 motors_reversed: True
 
 # === PID parameters
-Kp: 8
+Kp: 10
 Kd: 0
-Ki: 8
+Ki: 6
 Ko: 6000
 accel_limit: 1.0
 
