@@ -26,6 +26,10 @@ import os
 
 from math import sin, cos, pi
 from geometry_msgs.msg import Quaternion, Twist, Pose
+
+# TODO:  Remove temp code 
+from geometry_msgs.msg import Vector3, Vector3Stamped  
+
 from nav_msgs.msg import Odometry
 from tf.broadcaster import TransformBroadcaster
  
@@ -92,6 +96,9 @@ class BaseController:
         
         rospy.loginfo("Started base controller for a base of " + str(self.wheel_track) + "m wide with " + str(self.encoder_resolution) + " ticks per rev")
         rospy.loginfo("Publishing odometry data at: " + str(self.rate) + " Hz using " + str(self.base_frame) + " as base frame")
+
+        # Set up debug publisher for v_left, v_right (TODO:  remove temp code)
+        self.vPub = rospy.Publisher('vdebug', Vector3, queue_size=5)
         
     def setup_pid(self, pid_params):
         # Check to see if any PID parameters are missing
@@ -210,6 +217,10 @@ class BaseController:
             # Set motor speeds in encoder ticks per PID loop
             if not self.stopped:
                 self.arduino.drive(self.v_left, self.v_right)
+                # TODO: remove temp code
+                vMsg = Vector3(self.v_left * 1.0, self.v_right * 1.0, 0.0)
+                self.vPub.Publish(vMsg)
+                # =======================
                 
             self.t_next = now + self.t_delta
             
