@@ -219,7 +219,7 @@ class BaseController:
                 self.arduino.drive(self.v_left, self.v_right)
                 # TODO: remove temp code
                 vMsg = Vector3(self.v_left * 1.0, self.v_right * 1.0, 0.0)
-                self.vPub.Publish(vMsg)
+                self.vPub.publish(vMsg)
                 # =======================
                 
             self.t_next = now + self.t_delta
