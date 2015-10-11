@@ -39,7 +39,7 @@ class BaseController:
         self.arduino = arduino
         self.base_frame = base_frame
         self.rate = float(rospy.get_param("~base_controller_rate", 10))
-        self.timeout = rospy.get_param("~base_controller_timeout", 1.0)
+        self.timeout = rospy.get_param("~base_controller_timeout", 2.0)
         self.stopped = False
                  
         pid_params = dict()
