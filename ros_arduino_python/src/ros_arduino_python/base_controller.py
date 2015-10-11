@@ -247,8 +247,8 @@ class BaseController:
             left = x - th * self.wheel_track  * self.gear_reduction / 2.0
             right = x + th * self.wheel_track  * self.gear_reduction / 2.0
             
-        self.v_des_left = int(left * self.ticks_per_meter / self.arduino.PID_RATE)
-        self.v_des_right = int(right * self.ticks_per_meter / self.arduino.PID_RATE)
+        self.v_des_left = int(left * self.ticks_per_meter / self.arduino.FRAME_RATE)
+        self.v_des_right = int(right * self.ticks_per_meter / self.arduino.FRAME_RATE)
         
 
         

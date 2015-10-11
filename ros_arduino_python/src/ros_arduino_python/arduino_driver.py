@@ -28,6 +28,7 @@ import time
 import sys, traceback
 from serial.serialutil import SerialException
 from serial import Serial
+import rospy  # needed to access YAML params
 
 SERVO_MAX = 180
 SERVO_MIN = 0
@@ -40,7 +41,11 @@ class Arduino:
     
     def __init__(self, port="/dev/ttyUSB0", baudrate=57600, timeout=0.5):
         
-        self.PID_RATE = 30 # Do not change this!  It is a fixed property of the Arduino PID controller.
+        # self.RATE = 30 # Do not change this!  It is a fixed property of the Arduino PID controller.
+        # Re-named PID_RATE --> FRAME_RATE to match TargetTicksPerFrame used in ROSArduinoBridge.ino
+        # And this value is now stored in config YAML file
+        self.FRAME_RATE = rospy.get_param("~FRAME_RATE", 1)
+        # Not changing PID_INTERVAL because unused right now
         self.PID_INTERVAL = 1000 / 30
         
         self.port = port
@@ -277,9 +282,11 @@ class Arduino:
     def drive(self, right, left):
         ''' Speeds are given in encoder ticks per PID interval
         '''
+        # Believe this functions correctly despite insane argument naming
         return self.execute_ack('m %d %d' %(right, left))
     
     def drive_m_per_s(self, right, left):
+        # Believe this function is unused.  To use it may have to fix PID_INTERVAL
         ''' Set the motor speeds in meters per second.
         '''
         left_revs_per_second = float(left) / (self.wheel_diameter * PI)

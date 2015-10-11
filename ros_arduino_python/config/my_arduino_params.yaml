@@ -13,6 +13,8 @@ sensorstate_rate: 10
 use_base_controller: True
 base_controller_rate: 1
 # TODO: set rate above slow for debug;  was 10
+# Acc. RAB README base_controller_rate controls how often odometry data are published
+## however, in base_controller.py it also determines rate for polling and speed setpoint adjustments
 
 # For a robot that uses base_footprint, change base_frame to base_footprint
 base_frame: base_link
@@ -23,6 +25,10 @@ wheel_track: 0.099
 encoder_resolution: 48 # do I have to fake this?
 gear_reduction: 1.0
 motors_reversed: True
+# FRAME_RATE is number of frames/sec used for converting m/s velocity to (encoder ticks / frame)
+## Default FRAME_RATE in original RAB is 30 (Hz)
+## Default for my interval-based control is 1 (Hz)
+FRAME_RATE: 1
 
 # === PID parameters
 Kp: 10
