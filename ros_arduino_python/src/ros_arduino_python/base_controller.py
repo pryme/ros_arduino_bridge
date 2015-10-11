@@ -237,15 +237,18 @@ class BaseController:
 
         if x == 0:
             # Turn in place
-            right = th * self.wheel_track  * self.gear_reduction / 2.0
+            # right = th * self.wheel_track  * self.gear_reduction / 2.0
+            right = th * self.wheel_track / 2.0  # gear_reduction alreay in ticks_per_meter below
             left = -right
         elif th == 0:
             # Pure forward/backward motion
             left = right = x
         else:
             # Rotation about a point in space
-            left = x - th * self.wheel_track  * self.gear_reduction / 2.0
-            right = x + th * self.wheel_track  * self.gear_reduction / 2.0
+            # left = x - th * self.wheel_track  * self.gear_reduction / 2.0  # gear_reduction not needed
+            # right = x + th * self.wheel_track  * self.gear_reduction / 2.0
+            left = x - th * self.wheel_track / 2.0
+            right = x + th * self.wheel_track / 2.0
             
         self.v_des_left = int(left * self.ticks_per_meter / self.arduino.FRAME_RATE)
         self.v_des_right = int(right * self.ticks_per_meter / self.arduino.FRAME_RATE)
