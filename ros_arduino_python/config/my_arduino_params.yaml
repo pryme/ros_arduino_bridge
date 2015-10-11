@@ -11,7 +11,7 @@ rate: 50
 sensorstate_rate: 10
 
 use_base_controller: True
-base_controller_rate: 1
+base_controller_rate: 2
 # TODO: set rate above slow for debug;  was 10
 # Acc. RAB README base_controller_rate controls how often odometry data are published
 ## however, in base_controller.py it also determines rate for polling and speed setpoint adjustments
