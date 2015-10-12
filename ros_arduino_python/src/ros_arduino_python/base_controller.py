@@ -223,7 +223,7 @@ class BaseController:
                 if self.v_right < self.v_des_right:
                     self.v_right = self.v_des_right
                 if abs(self.v_right) < self.min_abs_speed:  # avoid deadband
-                    self.v_left = 0
+                    self.v_right = 0
             
             # Set motor speeds in encoder ticks per PID loop
             if not self.stopped:
