@@ -37,7 +37,7 @@ Ki: 6
 Ko: 6000
 accel_limit: 1.0
 # min_abs_speed is the min abs val speed sp to be sent to the Teensy PID loop (avoid deadband)
-min_abs_speed: 60
+min_abs_speed: 80
 
 # === Sensor definitions.  Examples only - edit for your robot.
 #     Sensor type can be one of the follow (case sensitive!):
