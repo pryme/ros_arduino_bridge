@@ -203,7 +203,7 @@ class BaseController:
                 self.v_left += self.max_accel
                 if self.v_left > self.v_des_left:
                     self.v_left = self.v_des_left
-                if abs(self.v_left) < self.min_abs_speed:  # avoid deadband in Teensy PID
+                if abs(self.v_left) < self.min_abs_speed and abs(self.v_left) >= 1:  # avoid deadband in Teensy PID
                     self.v_left = self.min_abs_speed * self.v_left / abs(self.v_left)
             else:
                 self.v_left -= self.max_accel
@@ -216,7 +216,7 @@ class BaseController:
                 self.v_right += self.max_accel
                 if self.v_right > self.v_des_right:
                     self.v_right = self.v_des_right
-                if abs(self.v_right) < self.min_abs_speed:  # avoid deadband in Teensy PID
+                if abs(self.v_right) < self.min_abs_speed and abs(self.v_right) >= 1:  # avoid deadband in Teensy PID
                     self.v_right = self.min_abs_speed * self.v_right / abs(self.v_right)
             else:
                 self.v_right -= self.max_accel
