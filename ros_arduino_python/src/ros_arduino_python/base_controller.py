@@ -63,6 +63,9 @@ class BaseController:
         
         # What is the maximum acceleration we will tolerate when changing wheel speeds?
         self.max_accel = self.accel_limit * self.ticks_per_meter / self.rate
+
+        # What is the minimum absolute speed value compatible with Teensy PID loop?
+        self.min_abs_speed = rospy.get_param("~min_abs_speed", 50)
                 
         # Track how often we get a bad encoder count (if any)
         self.bad_encoder_count = 0
@@ -200,19 +203,27 @@ class BaseController:
                 self.v_left += self.max_accel
                 if self.v_left > self.v_des_left:
                     self.v_left = self.v_des_left
+                if abs(self.v_left) < self.min_abs_speed:  # avoid deadband in Teensy PID
+                    self.v_left = self.min_abs_speed * self.v_left / abs(self.v_left)
             else:
                 self.v_left -= self.max_accel
                 if self.v_left < self.v_des_left:
                     self.v_left = self.v_des_left
+                if abs(self.v_left) < self.min_abs_speed:  # avoid deadband
+                    self.v_left = 0
             
             if self.v_right < self.v_des_right:
                 self.v_right += self.max_accel
                 if self.v_right > self.v_des_right:
                     self.v_right = self.v_des_right
+                if abs(self.v_right) < self.min_abs_speed:  # avoid deadband in Teensy PID
+                    self.v_right = self.min_abs_speed * self.v_right / abs(self.v_right)
             else:
                 self.v_right -= self.max_accel
                 if self.v_right < self.v_des_right:
                     self.v_right = self.v_des_right
+                if abs(self.v_right) < self.min_abs_speed:  # avoid deadband
+                    self.v_left = 0
             
             # Set motor speeds in encoder ticks per PID loop
             if not self.stopped:
