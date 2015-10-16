@@ -31,9 +31,9 @@ motors_reversed: True
 FRAME_RATE: 1
 
 # === PID parameters
-Kp: 10
+Kp: 50
 Kd: 0
-Ki: 6
+Ki: 30
 Ko: 6000
 accel_limit: 1.0
 # min_abs_speed is the min abs val speed sp to be sent to the Teensy PID loop (avoid deadband)

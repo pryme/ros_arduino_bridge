@@ -49,7 +49,7 @@
 #define my_diff_controller_h
 
 /* enable 'if (DEBUG) Serial.println();' or similar */
-#define DEBUG (1==1)
+#define DEBUG (1==0)
 
 /* globals declared here */
 const int kMaxPWM = 255;      // hard-code for now
