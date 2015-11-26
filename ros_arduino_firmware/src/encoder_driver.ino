@@ -78,13 +78,23 @@ volatile long EL_last_interval = 0;  // most recent interval (us), left encoder
 volatile long ER_last_interval = 0;  
 volatile boolean EL_keep = false; // flag to save only every other micros count
 volatile boolean ER_keep = false;  
-elapsedMicros EL_micros = 0;  // counts micros for left encoder
+/* moved to .h file ******************************
+elapsedMicros EL_micros = 0;  // counts interval for left encoder in microsec
 elapsedMicros ER_micros =0;  
+*************************************************/
 volatile long EL_ticks = 0L;  // accumulates tick count for left encoder
 volatile long ER_ticks = 0L;
 // TODO:  check whether any of the above get used out of this scope.
+//
+/* moved to .h file ******************************
+elapsedMicros EL_waiting = 0;  // microsec since last encoder interrupt
+elapsedMicros ER_waiting = 0;
+long E_timeout = 100000;  // if no encoder int in this time, assume stall
+// E_timeout operates with single tick interval
+*************************************************/
 
 ISR(INT0_vect){  // interrupt routine for left encoder
+    EL_waiting = 0;  // reset timeout 
 	if (EL_keep){  // only save interval every other tick to eliminate comparator asymmetry
 		EL_last_interval = EL_micros;  // save the interval (us)
 		EL_micros = 0;  // reset the elapssedMicros object
@@ -100,6 +110,7 @@ ISR(INT0_vect){  // interrupt routine for left encoder
 	// TODO:  there might be a faster way using bit shifting
 }
 ISR(INT1_vect){  // interrupt routine for right encoder
+    ER_waiting = 0;  // reset timeout
 	if (ER_keep){  // only save interval every other tick to eliminate comparator asymmetry
 		ER_last_interval = ER_micros;  // save the interval (us)
 		ER_micros = 0;  // reset the elapssedMicros object
@@ -109,12 +120,12 @@ ISR(INT1_vect){  // interrupt routine for right encoder
     if (rightPID.motor_dir == 1) {
 	    ER_ticks += 1L;  // increment the tick count every tick
     } else {
-        ER_ticks -=1L;  // if reverse dir
+        ER_ticks -= 1L;  // if reverse dir
     }
     
 }
 
-/* Wrap the encoder reading function */
+/* Return the encoder tick value */
 long readEncoder(int i) {
 	if (i == LEFT) {
 		return EL_ticks;
@@ -123,13 +134,15 @@ long readEncoder(int i) {
 	}
 }
 
-/* Wrap the encoder reset function */
+/* Reset encoder */
 void resetEncoder(int i) {
 	if (i == LEFT){
 		EL_ticks = 0L;
+        EL_waiting = 0L;
 		return;
 	} else { 
 		ER_ticks = 0L;
+        ER_waiting = 0L;
 		return;
 	}
 }

@@ -49,7 +49,7 @@
 #define my_diff_controller_h
 
 /* enable 'if (DEBUG) Serial.println();' or similar */
-#define DEBUG (1==1)
+#define DEBUG (1==0)
 
 /* globals declared here */
 const int kMaxPWM = 255;      // hard-code for now
@@ -166,6 +166,9 @@ void doPID(PIDData *pid) {
     co_delta = Kp * (c_term + d_term); 
     if (controller_reversed) {co_delta = 0.0 - co_delta;}  // means inverse action
     pid->co += co_delta;  // adjust the controller output
+    if (pid->co <= 0){  // limit co to positive values
+        pid->co = 0;
+    }
     if (pid->co > kMaxPWM) {  // limit to max possible output
       pid->co = kMaxPWM;
     } 
@@ -178,11 +181,15 @@ void doPID(PIDData *pid) {
 void updatePID(void){  
     if (!moving) {   // there's no command to move
         if (!PIDs_are_reset) {resetPID(); }
+        EL_micros = 0;  // reset encoder interval every update until commanded to move
+        ER_micros = 0; 
         return;  // nothing more to do
     }
     
     /* If commanded and just starting, get motors moving so interrupts can happen */
     if (moving && PIDs_are_reset) {  // we're just starting;  moving set by RAB
+        PIDs_are_reset = false;
+        /*
         float deadband = 5.0;  // ignore if abs(speed) <= deadband
         int left_speed = 0;  // just for starting
         int right_speed = 0;
@@ -213,9 +220,14 @@ void updatePID(void){
           Serial.print("; "); Serial.println(right_speed);
         }
       */  
-        PIDs_are_reset = false;
-        delayMicroseconds(500000);  // time to overcome stiction; was 250k us
-    } 
+     /*   
+        for (int iii = 0; iii < 15; iii++){
+          delayMicroseconds(15000);  // time to overcome stiction;
+          // not sure this is still needed, or what min time needed is
+          // delayMicroseconds fn can't go beyond ~16383 us
+        }
+     */
+    }  // end if !moving 
     
     if (isFreshEncoderInterval(LEFT)){
       leftPID.pv_old2 = leftPID.pv_old1;  // save prior values
@@ -234,6 +246,11 @@ void updatePID(void){
       }
     }
    
+   if (EL_waiting > E_timeout) {  // too long since last encoder interrupt
+       // drive full-on to break stiction / stall
+       setMotorSpeed(LEFT, 255 * leftPID.motor_dir);  
+   }
+       
    if (isFreshEncoderInterval(RIGHT)){
       rightPID.pv_old2 = rightPID.pv_old1;  // save prior values
       rightPID.pv_old1 = rightPID.pv;      
@@ -249,7 +266,13 @@ void updatePID(void){
       if (DEBUG){
           Serial.print("; set R M:  "); Serial.println(rightPID.co * rightPID.motor_dir);
       }
-   } 
+   }
+
+   if (ER_waiting > E_timeout) {  // too long since last encoder interrupt
+       // drive full-on to break stiction / stall
+       setMotorSpeed(RIGHT, 255 * rightPID.motor_dir);  
+   }
+   
 }  // end updatePID()
 
 #endif
