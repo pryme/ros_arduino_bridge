@@ -82,6 +82,31 @@
     setMotorSpeed(LEFT, leftSpeed);
     setMotorSpeed(RIGHT, rightSpeed);
   }
+#elif defined POLOLU_ASTAR_ROBOT_CONTROLLER
+  #include  <AStar32U4.h>
+
+  AStar32U4Motors drive;
+
+  void initMotorController() {
+    // Uncomment to flip a motor's direction:
+    //motors.flipM1(true);
+    //motors.flipM2(true);
+  }
+
+  void setMotorSpeed(int i, int spd) {
+#if defined SPARKFUN_REDBOT_ENCODER
+    setDir(i, (spd < 0) ? -1 : 1);
+#endif
+
+    if (i == LEFT) drive.setM1Speed(spd);
+    else drive.setM2Speed(spd);
+  }
+
+  // A convenience function for setting both motor speeds
+  void setMotorSpeeds(int leftSpeed, int rightSpeed) {
+    setMotorSpeed(LEFT, leftSpeed);
+    setMotorSpeed(RIGHT, rightSpeed);
+  }
 #else
   #error A motor driver must be selected!
 #endif

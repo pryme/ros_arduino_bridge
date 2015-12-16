@@ -1,20 +1,20 @@
 /*********************************************************************
  *  ROSArduinoBridge
- 
+
     A set of simple serial commands to control a differential drive
-    robot and receive back sensor and odometry data. Default 
+    robot and receive back sensor and odometry data. Default
     configuration assumes use of an Arduino Mega + Pololu motor
     controller shield + Robogaia Mega Encoder shield.  Edit the
-    readEncoder() and setMotorSpeed() wrapper functions if using 
+    readEncoder() and setMotorSpeed() wrapper functions if using
     different motor controller or encoder method.
 
     Created for the Pi Robot Project: http://www.pirobot.org
     and the Home Brew Robotics Club (HBRC): http://hbrobotics.org
-    
+
     Authors: Patrick Goebel, James Nugen
 
     Inspired and modeled after the ArbotiX driver by Michael Ferguson
-    
+
     Software License Agreement (BSD License)
 
     Copyright (c) 2012, Patrick Goebel.
@@ -57,16 +57,19 @@
    //#define POLOLU_MC33926
 
    /* The Pololu DRV8835 dual motor driver shield */
-   #define POLOLU_DRV8835
+   // #define POLOLU_DRV8835
+
+   /* The A-Star 32U4 Robot Controller LV with Raspberry Pi Bridge */
+   #define POLOLU_ASTAR_ROBOT_CONTROLLER
 
    /* The RoboGaia encoder shield */
    //#define ROBOGAIA
-   
+
    /* Encoders directly attached to Arduino board */
-   //#define ARDUINO_ENC_COUNTER
+   // #define ARDUINO_ENC_COUNTER
 
    /* The RedBot encoder */
-   #define SPARKFUN_REDBOT_ENCODER
+   // #define SPARKFUN_REDBOT_ENCODER
 #endif
 
 //#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
@@ -120,7 +123,7 @@
 
   /* Convert the rate into an interval */
   const int PID_INTERVAL = 1000 / PID_RATE;
-  
+
   /* Track the next time we make a PID calculation */
   unsigned long nextPID = PID_INTERVAL;
 
@@ -128,6 +131,11 @@
    in this number of milliseconds */
   #define AUTO_STOP_INTERVAL 2000
   long lastMotorCommand = AUTO_STOP_INTERVAL;
+#endif
+
+#ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+  #include <Wire.h>
+  #include "I2C.h"
 #endif
 
 /* Variable initialization */
@@ -169,7 +177,7 @@ int runCommand() {
   int pid_args[4];
   arg1 = atoi(argv1);
   arg2 = atoi(argv2);
-  
+
   switch(cmd) {
   case GET_BAUDRATE:
     Serial.println(BAUDRATE);
@@ -206,7 +214,7 @@ int runCommand() {
     Serial.println(servos[arg1].getServo().read());
     break;
 #endif
-    
+
 #ifdef USE_BASE
   case READ_ENCODERS:
     Serial.print(readEncoder(LEFT));
@@ -250,31 +258,15 @@ int runCommand() {
 
 /* Setup function--runs once at startup. */
 void setup() {
+#ifdef USE_I2C
+  initI2c();
+#endif
+
   Serial.begin(BAUDRATE);
 
 // Initialize the motor controller if used */
 #ifdef USE_BASE
-  #ifdef ARDUINO_ENC_COUNTER
-    //set as inputs
-    DDRD &= ~(1<<LEFT_ENC_PIN_A);
-    DDRD &= ~(1<<LEFT_ENC_PIN_B);
-    DDRC &= ~(1<<RIGHT_ENC_PIN_A);
-    DDRC &= ~(1<<RIGHT_ENC_PIN_B);
-    
-    //enable pull up resistors
-    PORTD |= (1<<LEFT_ENC_PIN_A);
-    PORTD |= (1<<LEFT_ENC_PIN_B);
-    PORTC |= (1<<RIGHT_ENC_PIN_A);
-    PORTC |= (1<<RIGHT_ENC_PIN_B);
-    
-    // tell pin change mask to listen to left encoder pins
-    PCMSK2 |= (1 << LEFT_ENC_PIN_A)|(1 << LEFT_ENC_PIN_B);
-    // tell pin change mask to listen to right encoder pins
-    PCMSK1 |= (1 << RIGHT_ENC_PIN_A)|(1 << RIGHT_ENC_PIN_B);
-    
-    // enable PCINT1 and PCINT2 interrupt in the general interrupt mask
-    PCICR |= (1 << PCIE1) | (1 << PCIE2);
-  #endif
+  initEncoder();
   initMotorController();
   resetPID();
 #endif
@@ -297,7 +289,7 @@ void setup() {
 */
 void loop() {
   while (Serial.available() > 0) {
-    
+
     // Read the next character
     chr = Serial.read();
 
@@ -335,14 +327,18 @@ void loop() {
       }
     }
   }
-  
+
+#ifdef USE_I2C
+  runI2c();
+#endif
+
 // If we are using base control, run a PID calculation at the appropriate intervals
 #ifdef USE_BASE
   if (millis() > nextPID) {
     updatePID();
     nextPID += PID_INTERVAL;
   }
-  
+
   // Check to see if we have exceeded the auto-stop interval
   if ((millis() - lastMotorCommand) > AUTO_STOP_INTERVAL) {;
     setMotorSpeeds(0, 0);
