@@ -146,7 +146,7 @@ void runI2c() {
   i2c_buffer[0x40] = 0;
 
   if (cmd > 0) {
-    Serial.print("i2c_handle_command("); Serial.println(cmd);
+    Serial.print("i2c_handle_command("); Serial.print(cmd);
   }
 
   switch(cmd) {
@@ -160,23 +160,31 @@ void runI2c() {
   case MOTOR_SPEEDS:
     /* Reset the auto stop timer */
     lastMotorCommand = millis();
-    if (i2c_buffer[0x4c] == i2c_buffer[0x4d] == i2c_buffer[0x4e] == i2c_buffer[0x4f] == 0) {
+    if (i2c_buffer[0x4c] == 0 && i2c_buffer[0x4d] == 0 && i2c_buffer[0x4e] == 0 && i2c_buffer[0x4f] == 0) {
       setMotorSpeeds(0, 0);
       moving = 0;
     }
     else {
       moving = 1;
     }
-    leftPID.TargetTicksPerFrame = (int)i2c_buffer[0x4d] << 8 | ((int)i2c_buffer[0x4c] & 0xff);
-    rightPID.TargetTicksPerFrame = (int)i2c_buffer[0x4f] << 8 | ((int)i2c_buffer[0x4e] & 0xff);
+    leftPID.TargetTicksPerFrame = (double)((int)i2c_buffer[0x4d] << 8 | ((int)i2c_buffer[0x4c] & 0xff));
+    rightPID.TargetTicksPerFrame = (double)((int)i2c_buffer[0x4f] << 8 | ((int)i2c_buffer[0x4e] & 0xff));
+    Serial.print(") leftTpF= "); Serial.print(leftPID.TargetTicksPerFrame);
+    Serial.print("  rightTpF= "); Serial.print(rightPID.TargetTicksPerFrame);
     break;
   case 'u':  // UPDATE_PID
     Kp = (int)i2c_buffer[0x51] << 8 | ((int)i2c_buffer[0x50] & 0xff);
     Kd = (int)i2c_buffer[0x53] << 8 | ((int)i2c_buffer[0x52] & 0xff);
     Ki = (int)i2c_buffer[0x55] << 8 | ((int)i2c_buffer[0x54] & 0xff);
     Ko = (int)i2c_buffer[0x57] << 8 | ((int)i2c_buffer[0x56] & 0xff);
+    Serial.print(")  Kp= "); Serial.print(Kp); Serial.print("  Kd= "); Serial.print(Kd);
+    Serial.print("  Ki= "); Serial.print(Ki); Serial.print("  Ko= "); Serial.print(Ko);
     break;
   }
+  if (cmd > 0) {
+    Serial.println(" ");
+  }
+
 }
 
 #endif
