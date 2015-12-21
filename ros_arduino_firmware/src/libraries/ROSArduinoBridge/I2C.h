@@ -3,7 +3,8 @@
 
 #define USE_I2C
 
-#define I2C_MAX_SENT_BYTES 3
+#define I2C_MAX_SENT_BYTES 8
+#define I2C_ADDRESS        0x42
 
 volatile unsigned char i2c_buffer[] = {
   // 0x00 - 0x07 Version, read-only
@@ -42,7 +43,7 @@ volatile unsigned char i2c_buffer[] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-unsigned char i2c_received_buffer[I2C_MAX_SENT_BYTES];
+unsigned char i2c_requested_address = 0;
 
 static void i2c_update_encoder_buffer(unsigned char cmd) {
   long e = readEncoder((cmd - 0x44) / 4);
@@ -53,53 +54,81 @@ static void i2c_update_encoder_buffer(unsigned char cmd) {
   i2c_buffer[cmd + 3] = (e >> 24) & 0xff;
 }
 
-static void i2c_request_event() {
-  unsigned char cmd = i2c_received_buffer[0];
-  unsigned char len = 1;
+static unsigned int calculate_fletcher16(unsigned char *buff, unsigned char len) {
+  unsigned char s1 = 0;
+  unsigned char s2 = 0;
 
-  if (cmd < 0x40) {
-    cmd = (cmd / 8) * 8;
+  for (unsigned char i = 0; i < len; i++) {
+    s1 += buff[i];
+    s2 += s1;
+  }
+
+  return (unsigned int)(((unsigned int)s2) << 8 | ((unsigned int)s1) & 0xff);
+}
+
+static void i2c_request_event() {
+  unsigned char addr = i2c_requested_address;
+  unsigned char len = 1;
+  unsigned char buff[16];
+
+  if (addr < 0x40) {
+    addr = (addr / 8) * 8;
     len = 8;
   }
-  else if (cmd < 0x44) {
+  else if (addr < 0x44) {
     // Just one byte useless values
   }
-  else if (cmd < 0x4c) {
-    cmd = (cmd / 4) * 4;
+  else if (addr < 0x4c) {
+    addr = (addr / 4) * 4;
     len = 4;
   }
-  else if (cmd < sizeof(i2c_buffer)) {
-    cmd = (cmd / 2) * 2;
+  else if (addr < sizeof(i2c_buffer)) {
+    addr = (addr / 2) * 2;
     len = 2;
   }
 
-  if (len > 2) {
-    Wire.write(len);
+  buff[0] = I2C_ADDRESS;
+  buff[1] = addr;
+  buff[2] = len + 2;
+
+  for (unsigned char i = 0; i < len; i++) {
+    buff[3 + i] = ((unsigned char *)(i2c_buffer + addr))[i];
   }
 
-  Wire.write((unsigned char *)(i2c_buffer + i2c_received_buffer[0]), len);
+  unsigned int chk = calculate_fletcher16(buff, len + 3);
+
+  buff[3 + len] = chk & 0xff;
+  buff[3 + len + 1] = (chk >> 8) & 0xff;
+
+  Wire.write(len + 2);
+  Wire.write((unsigned char *)(buff + 3), len + 2);
 }
 
 static void i2c_receive_event(int bytes_received) {
+  unsigned char buff[I2C_MAX_SENT_BYTES];
   unsigned char cmd;
-  unsigned char len;
 
   for (int a = 0; a < I2C_MAX_SENT_BYTES; a++) {
-    i2c_received_buffer[a] = 0;
+    buff[a] = 0;
   }
 
+  buff[0] = I2C_ADDRESS;
+
   for (int a = 0; a < bytes_received; a++) {
-    if ( a < I2C_MAX_SENT_BYTES) {
-      i2c_received_buffer[a] = Wire.read();
+    if (a  + 1 < I2C_MAX_SENT_BYTES) {
+      buff[a + 1] = Wire.read();
     }
     else {
       Wire.read();  // if we receive more data then allowed just throw it away
     }
   }
 
-  cmd = i2c_received_buffer[0] = i2c_received_buffer[0] % sizeof(i2c_buffer);
+  cmd = buff[1] = buff[1] % sizeof(i2c_buffer);
 
   if (bytes_received == 1) {
+    // Those are actually reads
+    i2c_requested_address = cmd;
+
     if (cmd == 0x44 || cmd == 0x48) {
        i2c_update_encoder_buffer(cmd);
     }
@@ -107,22 +136,39 @@ static void i2c_receive_event(int bytes_received) {
 
   if (bytes_received > 1) {
     // We got a write/process.
+    unsigned char len = buff[2];
+
+    if (len < 3) {
+      // Too short
+      Serial.println("i2c_receive_event too short");
+      return;
+    }
+
+    // remove the checkup bytes
+    len -= 2;
+    unsigned int chk = calculate_fletcher16(buff, len + 3); // +3 -- the header bytes
+    unsigned int chk_r = buff[3 + len + 1] << 8 | buff[3 + len];
+    if (chk != chk_r) {
+      // Checksum error
+      Serial.print("i2c_receive_event checksum error "); Serial.print(chk); Serial.print(" != "); Serial.println(chk_r);
+      return;
+    }
+
     if (cmd == 0x40) {
       // We got a command
-      i2c_buffer[cmd] = i2c_received_buffer[1];
+      i2c_buffer[cmd] = buff[3];
     }
     else if (cmd == 0x4c || cmd == 0x4e ||
         cmd == 0x50 || cmd == 0x52 || cmd == 0x54 || cmd == 0x56) {
       // two bytes expected
-      i2c_buffer[cmd] = i2c_received_buffer[1];
-      i2c_buffer[cmd + 1] = i2c_received_buffer[2];
+      i2c_buffer[cmd] = buff[3];
+      i2c_buffer[cmd + 1] = buff[4];
     }
   }
 }
 
-
 void initI2c() {
-  Wire.begin(0x42);
+  Wire.begin(I2C_ADDRESS);
   Wire.onReceive(i2c_receive_event);
   Wire.onRequest(i2c_request_event);
 
@@ -174,8 +220,8 @@ void runI2c() {
     break;
   case 'u':  // UPDATE_PID
     Kp = (int)i2c_buffer[0x51] << 8 | ((int)i2c_buffer[0x50] & 0xff);
-    Kd = (int)i2c_buffer[0x53] << 8 | ((int)i2c_buffer[0x52] & 0xff);
-    Ki = (int)i2c_buffer[0x55] << 8 | ((int)i2c_buffer[0x54] & 0xff);
+    Ki = (int)i2c_buffer[0x53] << 8 | ((int)i2c_buffer[0x52] & 0xff);
+    Kd = (int)i2c_buffer[0x55] << 8 | ((int)i2c_buffer[0x54] & 0xff);
     Ko = (int)i2c_buffer[0x57] << 8 | ((int)i2c_buffer[0x56] & 0xff);
     Serial.print(")  Kp= "); Serial.print(Kp); Serial.print("  Kd= "); Serial.print(Kd);
     Serial.print("  Ki= "); Serial.print(Ki); Serial.print("  Ko= "); Serial.print(Ko);
