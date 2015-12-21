@@ -23,6 +23,8 @@
 import roslib; roslib.load_manifest('ros_arduino_python')
 import rospy
 import os
+import sys
+import traceback
 
 from math import sin, cos, pi
 from geometry_msgs.msg import Quaternion, Twist, Pose
@@ -122,11 +124,12 @@ class BaseController:
             # Read the encoders
             try:
                 left_enc, right_enc = self.arduino.get_encoder_counts()
-            except:
+            except Exception as e:
                 self.bad_encoder_count += 1
-                rospy.logerr("Encoder exception count: " + str(self.bad_encoder_count))
+                rospy.logerr("Encoder exception count: " + str(self.bad_encoder_count) + "  now: " + e.__class__.__name__)
+                rospy.logerr("mw stack trace: " + traceback.format_exc())
                 return
-                            
+
             dt = now - self.then
             self.then = now
             dt = dt.to_sec()

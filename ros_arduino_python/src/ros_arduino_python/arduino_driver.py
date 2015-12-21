@@ -22,6 +22,8 @@
 """
 
 import thread
+from abc import ABCMeta, abstractmethod
+
 from math import pi as PI, degrees, radians
 import os
 import sys
@@ -58,30 +60,39 @@ class Arduino:
 
     @abstractmethod
     def connect(self):
-
+        ''' Connect to the Arduino port
+        '''
+        return
 
     @abstractmethod
     def update_pid(self, Kp, Kd, Ki, Ko):
         ''' Set the PID parameters on the Arduino
         '''
+        return
 
     @abstractmethod
     def get_baud(self):
         ''' Get the current baud rate on the serial port.
         '''
+        return
 
     @abstractmethod
     def get_encoder_counts(self):
+        ''' Get the encoder counts from the Arduino
+        '''
+        return
 
     @abstractmethod
     def reset_encoders(self):
         ''' Reset the encoder counts to 0
         '''
+        return
 
     @abstractmethod
     def drive(self, left, right):
         ''' Speeds are given in encoder ticks per PID interval
         '''
+        return
 
     def drive_m_per_s(self, left, right):
         ''' Set the motor speeds in meters per second.
@@ -101,30 +112,47 @@ class Arduino:
 
     @abstractmethod
     def analog_read(self, pin):
+        ''' Read an analog pin
+        '''
+        return
 
     @abstractmethod
     def analog_write(self, pin, value):
+        ''' Write an analog pin
+        '''
+        return
 
     @abstractmethod
     def digital_read(self, pin):
+        ''' Read a digital pin
+        '''
+        return
 
     @abstractmethod
     def digital_write(self, pin, value):
+        ''' Read a digital pin
+        '''
+        return
 
     @abstractmethod
     def pin_mode(self, pin, mode):
+        '''Set the mode for a specific pin
+        '''
+        return
 
     @abstractmethod
     def servo_write(self, id, pos):
         ''' Usage: servo_write(id, pos)
             Position is given in radians and converted to degrees before sending
         '''
+        return
 
     @abstractmethod
     def servo_read(self, id):
         ''' Usage: servo_read(id)
             The returned position is converted from degrees to radians
         '''
+        return
 
     @abstractmethod
     def ping(self, pin):
@@ -132,6 +160,7 @@ class Arduino:
             connected to the General Purpose I/O line pinId for a distance,
             and returns the range in cm.  Sonar distance resolution is integer based.
         '''
+        return
 
     @abstractmethod
     def get_maxez1(self, triggerPin, outputPin):
@@ -144,3 +173,4 @@ class Arduino:
             (inches). The sensor distance resolution is integer based. Also, the
             maxsonar trigger pin is RX, and the echo pin is PW.
         '''
+        return

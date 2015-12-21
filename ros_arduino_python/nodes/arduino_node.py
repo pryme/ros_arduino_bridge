@@ -97,7 +97,7 @@ class ArduinoROS():
         # Make the connection
         self.controller.connect()
 
-        rospy.loginfo("Connected to Arduino on port " + self.port + " at " + str(self.baud) + " baud")
+        rospy.loginfo("Connected to Arduino on port " + str(self.port) + " at " + str(self.baud) + " baud")
 
         # Reserve a thread lock
         mutex = thread.allocate_lock()

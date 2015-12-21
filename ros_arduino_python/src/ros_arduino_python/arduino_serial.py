@@ -28,6 +28,7 @@ import time
 import sys, traceback
 from serial.serialutil import SerialException
 from serial import Serial
+from arduino_driver import Arduino
 
 class ArduinoSerial(Arduino):
     def __init__(self, port="/dev/ttyUSB0", baudrate=57600, timeout=0.5):

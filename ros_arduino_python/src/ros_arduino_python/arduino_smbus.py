@@ -23,31 +23,92 @@
 
 import thread
 from math import pi as PI, degrees, radians
+import ctypes
 import os
 import time
 import sys, traceback
 from smbus import SMBus
+from arduino_driver import Arduino
 
 class ArduinoSMBus(Arduino):
     def __init__(self, port = 1, device = 0x42):
+        self.retry_count = 3
         self.port = port
         self.device = device
         self.bus = None
         self.base_init()
 
     def connect(self):
-        self.bus = SMBus(port)
+        if self.bus != None:
+            self.bus.close()
+
+        self.bus = SMBus(self.port)
+
+    def calculate_fletcher16(self, buff):
+        s1 = 0
+        s2 = 0
+
+        for b in buff:
+            s1 += b
+            s2 += s1
+
+        ret = (s2 & 0xff) << 8 | (s1 & 0xff)
+        print "calculate_fletcher16 retuns %d" % ret
+
+        return ret
+
+
+    def handle_exeception(self, e):
+        if e.__class__.__name__ == "IOError":
+            print "handle_exeception?!"
+            try:
+                self.bus.close()
+            except Exception as e1:
+                print "handle_exeception - close execption " + e1.__class__.__name__
+                pass
+            try:
+                self.bus = SMBus(self.port)
+            except Exception as e2:
+                print "handle_exeception - open execption " + e2.__class__.__name__
+                pass
 
     def update_pid(self, Kp, Kd, Ki, Ko):
         ''' Set the PID parameters on the Arduino
         '''
         print "Updating PID parameters"
         self.mutex.acquire()
-        self.bus.write_i2c_block_data(self.device, 0x50, [ Kp & 0xff, (Kp >> 8) & 0xff ])
-        self.bus.write_i2c_block_data(self.device, 0x52, [ Ki & 0xff, (Ki >> 8) & 0xff ])
-        self.bus.write_i2c_block_data(self.device, 0x54, [ Kd & 0xff, (Kd >> 8) & 0xff ])
-        self.bus.write_i2c_block_data(self.device, 0x56, [ Ko & 0xff, (Ko >> 8) & 0xff ])
-        self.bus.write_byte_data(self.device, 0x40, 0x75)
+        retry = self.retry_count
+        while retry > 0:
+            try:
+                Kp_value = ctypes.c_short(Kp).value
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x50, 4, Kp_value & 0xff, (Kp_value >> 8) & 0xff ])).value
+                # print "update_pid Kp chk= %x" % chk
+                self.bus.write_i2c_block_data(self.device, 0x50, [ 4, Kp_value & 0xff, (Kp_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                Kd_value = ctypes.c_short(Kd).value
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x54, 4, Kd_value & 0xff, (Kd_value >> 8) & 0xff ])).value
+                # print "update_pid Kd chk= %x" % chk
+                self.bus.write_i2c_block_data(self.device, 0x54, [ 4, Kd_value & 0xff, (Kd_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                Ki_value = ctypes.c_short(Ki).value
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x52, 4, Ki_value & 0xff, (Ki_value >> 8) & 0xff ])).value
+                # print "update_pid Ki chk= %x" % chk
+                self.bus.write_i2c_block_data(self.device, 0x52, [ 4, Ki_value & 0xff, (Ki_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                Ko_value = ctypes.c_short(Ko).value
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x56, 4, Ko_value & 0xff, (Ko_value >> 8) & 0xff ])).value
+                # print "update_pid Ko chk= %x" % chk
+                self.bus.write_i2c_block_data(self.device, 0x56, [ 4, Ko_value & 0xff, (Ko_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x40, 3, 0x75 ])).value
+                # print "update_pid cmd chk= %x" % chk
+                self.bus.write_i2c_block_data(self.device, 0x40, [ 3, 0x75, chk & 0xff, (chk >> 8) & 0xff ])
+                retry = 0
+            except Exception as e:
+                print "update_pid execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
         self.mutex.release()
         return True
 
@@ -58,12 +119,39 @@ class ArduinoSMBus(Arduino):
 
     def get_encoder_counts(self):
         self.mutex.acquire()
-        r_value_array = self.bus.read_i2c_block_data(self.device, 0x48, 4)
-        l_value_array = self.bus.read_i2c_block_data(self.device, 0x44, 4)
+        retry = self.retry_count
+        while retry > 0:
+            try:
+                l_value_array = self.bus.read_i2c_block_data(self.device, 0x44, 6)
+                chk = self.calculate_fletcher16([ self.device, 0x44, 6, l_value_array[0], l_value_array[1], l_value_array[2], l_value_array[3]])
+                chk_r = ctypes.c_ushort((l_value_array[5] << 8 | l_value_array[4])).value
+
+                if chk != chk_r:
+                    print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
+                    raise ValueError('checksum error')
+
+                r_value_array = self.bus.read_i2c_block_data(self.device, 0x48, 6)
+                chk = self.calculate_fletcher16([ self.device, 0x48, 6, r_value_array[0], r_value_array[1], r_value_array[2], r_value_array[3]])
+                chk_r = ctypes.c_ushort((r_value_array[5] << 8 | r_value_array[4])).value
+                if chk != chk_r:
+                    print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
+                    raise ValueError('checksum error')
+                retry = -1
+            except Exception as e:
+                print "test execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
         self.mutex.release()
 
-        r_value = r_value_array[3] << 24 | r_value_array[2] << 16 | r_value_array[1] << 8 | r_value_array[0]
-        l_value = l_value_array[3] << 24 | l_value_array[2] << 16 | l_value_array[1] << 8 | l_value_array[0]
+        if retry == 0:
+            raise ValueError('Could not get values')
+
+        l_value = ctypes.c_long(l_value_array[3] << 24 | l_value_array[2] << 16 | l_value_array[1] << 8 | l_value_array[0]).value
+        r_value = ctypes.c_long(r_value_array[3] << 24 | r_value_array[2] << 16 | r_value_array[1] << 8 | r_value_array[0]).value
+
+        if l_value != 0 or r_value != 0:
+            print "get_encoder_counts --> %d:%d" % (l_value, r_value)
 
         return [ l_value, r_value ]
 
@@ -71,17 +159,45 @@ class ArduinoSMBus(Arduino):
         ''' Reset the encoder counts to 0
         '''
         self.mutex.acquire()
-        self.bus.write_byte_data(self.device, 0x40, 0x72)
+        retry = self.retry_count
+        while retry > 0:
+            try:
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x40, 3, 0x72 ])).value
+                self.bus.write_i2c_block_data(self.device, 0x40, [ 3, 0x72, chk & 0xff, (chk >> 8) & 0xff ])
+                retry = 0
+            except Exception as e:
+                print "test execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
         self.mutex.release()
         return True
 
     def drive(self, left, right):
         ''' Speeds are given in encoder ticks per PID interval
         '''
+        print "drive %d:%d" % (left, right)
         self.mutex.acquire()
-        self.bus.write_i2c_block_data(self.device, 0x4e, [ left & 0xff, (left >> 8) & 0xff ])
-        self.bus.write_i2c_block_data(self.device, 0x4c, [ right & 0xff, (right >> 8) & 0xff ])
-        self.bus.write_byte_data(self.device, 0x40, 0x6d)
+        retry = self.retry_count
+        while retry > 0:
+            r_value = ctypes.c_short(right).value
+            l_value = ctypes.c_short(left).value
+            print "drive converted %d:%d" % (l_value, r_value)
+            try:
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x4c, 4, l_value & 0xff, (l_value >> 8) & 0xff ])).value
+                self.bus.write_i2c_block_data(self.device, 0x4c, [ 4, l_value & 0xff, (l_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x4e, 4, r_value & 0xff, (r_value >> 8) & 0xff ])).value
+                self.bus.write_i2c_block_data(self.device, 0x4e, [ 4, r_value & 0xff, (r_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
+
+                chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x40, 3, 0x6d ])).value
+                self.bus.write_i2c_block_data(self.device, 0x40, [ 3, 0x6d, chk & 0xff, (chk >> 8) & 0xff ])
+                retry = 0
+            except Exception as e:
+                print "test execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
         self.mutex.release()
         return True
 
