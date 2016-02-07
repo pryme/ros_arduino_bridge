@@ -15,10 +15,10 @@
 #elif defined POLOLU_ASTAR_ROBOT_CONTROLLER
 
   #define LEFT_ENC_PIN_XOR 8   // D8
-  #define LEFT_ENC_PIN_B   A4
+  #define LEFT_ENC_PIN_B   11  // D11
 
   #define RIGHT_ENC_PIN_XOR 7  // D7
-  #define RIGHT_ENC_PIN_B   A5
+  #define RIGHT_ENC_PIN_B   5  // D5
 #endif
 
 void initEncoder();
