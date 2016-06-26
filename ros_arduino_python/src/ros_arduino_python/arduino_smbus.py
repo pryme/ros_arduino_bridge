@@ -53,14 +53,14 @@ class ArduinoSMBus(Arduino):
             s2 += s1
 
         ret = (s2 & 0xff) << 8 | (s1 & 0xff)
-        print "calculate_fletcher16 retuns %d" % ret
+        # print "calculate_fletcher16 retuns %d" % ret
 
         return ret
 
 
     def handle_exeception(self, e):
         if e.__class__.__name__ == "IOError":
-            print "handle_exeception?!"
+            # print "handle_exeception?!"
             try:
                 self.bus.close()
             except Exception as e1:
@@ -75,7 +75,7 @@ class ArduinoSMBus(Arduino):
     def update_pid(self, Kp, Kd, Ki, Ko):
         ''' Set the PID parameters on the Arduino
         '''
-        print "Updating PID parameters"
+        # print "Updating PID parameters"
         self.mutex.acquire()
         retry = self.retry_count
         while retry > 0:
@@ -119,7 +119,7 @@ class ArduinoSMBus(Arduino):
 
     def get_encoder_counts(self):
         self.mutex.acquire()
-        retry = self.retry_count
+        retry = self.retry_count * 2
         while retry > 0:
             try:
                 l_value_array = self.bus.read_i2c_block_data(self.device, 0x44, 6)
@@ -127,31 +127,45 @@ class ArduinoSMBus(Arduino):
                 chk_r = ctypes.c_ushort((l_value_array[5] << 8 | l_value_array[4])).value
 
                 if chk != chk_r:
-                    print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
-                    raise ValueError('checksum error')
-
-                r_value_array = self.bus.read_i2c_block_data(self.device, 0x48, 6)
-                chk = self.calculate_fletcher16([ self.device, 0x48, 6, r_value_array[0], r_value_array[1], r_value_array[2], r_value_array[3]])
-                chk_r = ctypes.c_ushort((r_value_array[5] << 8 | r_value_array[4])).value
-                if chk != chk_r:
-                    print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
+                    # print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
                     raise ValueError('checksum error')
                 retry = -1
             except Exception as e:
-                print "test execption " + e.__class__.__name__
+                # print "test execption " + e.__class__.__name__
                 self.handle_exeception(e)
                 retry -= 1
                 pass
         self.mutex.release()
 
         if retry == 0:
-            raise ValueError('Could not get values')
+            raise ValueError('Could not get l_value_array')
+
+        self.mutex.acquire()
+        retry = self.retry_count * 2
+        while retry > 0:
+            try:
+                r_value_array = self.bus.read_i2c_block_data(self.device, 0x48, 6)
+                chk = self.calculate_fletcher16([ self.device, 0x48, 6, r_value_array[0], r_value_array[1], r_value_array[2], r_value_array[3]])
+                chk_r = ctypes.c_ushort((r_value_array[5] << 8 | r_value_array[4])).value
+                if chk != chk_r:
+                    # print "get_encoder_counts chk= %x  chk_r= %x" % (chk, chk_r)
+                    raise ValueError('checksum error')
+                retry = -1
+            except Exception as e:
+                # print "test execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
+        self.mutex.release()
+
+        if retry == 0:
+            raise ValueError('Could not get r_value_array')
 
         l_value = ctypes.c_long(l_value_array[3] << 24 | l_value_array[2] << 16 | l_value_array[1] << 8 | l_value_array[0]).value
         r_value = ctypes.c_long(r_value_array[3] << 24 | r_value_array[2] << 16 | r_value_array[1] << 8 | r_value_array[0]).value
 
-        if l_value != 0 or r_value != 0:
-            print "get_encoder_counts --> %d:%d" % (l_value, r_value)
+        # if l_value != 0 or r_value != 0:
+        #     print "get_encoder_counts --> %d:%d" % (l_value, r_value)
 
         return [ l_value, r_value ]
 
@@ -166,7 +180,7 @@ class ArduinoSMBus(Arduino):
                 self.bus.write_i2c_block_data(self.device, 0x40, [ 3, 0x72, chk & 0xff, (chk >> 8) & 0xff ])
                 retry = 0
             except Exception as e:
-                print "test execption " + e.__class__.__name__
+                # print "test execption " + e.__class__.__name__
                 self.handle_exeception(e)
                 retry -= 1
                 pass
@@ -176,13 +190,13 @@ class ArduinoSMBus(Arduino):
     def drive(self, left, right):
         ''' Speeds are given in encoder ticks per PID interval
         '''
-        print "drive %d:%d" % (left, right)
+        # print "drive %d:%d" % (left, right)
         self.mutex.acquire()
         retry = self.retry_count
         while retry > 0:
             r_value = ctypes.c_short(right).value
             l_value = ctypes.c_short(left).value
-            print "drive converted %d:%d" % (l_value, r_value)
+            # print "drive converted %d:%d" % (l_value, r_value)
             try:
                 chk = ctypes.c_ushort(self.calculate_fletcher16([ self.device, 0x4c, 4, l_value & 0xff, (l_value >> 8) & 0xff ])).value
                 self.bus.write_i2c_block_data(self.device, 0x4c, [ 4, l_value & 0xff, (l_value >> 8) & 0xff, chk & 0xff, (chk >> 8) & 0xff ])
@@ -202,9 +216,35 @@ class ArduinoSMBus(Arduino):
         return True
 
     def analog_read(self, pin):
-        return 0
+        self.mutex.acquire()
+        addr = 0x58 + (pin * 2)
+        retry = self.retry_count
+        while retry > 0:
+            try:
+                value_array = self.bus.read_i2c_block_data(self.device, addr, 4)
+                chk = self.calculate_fletcher16([ self.device, addr, 4, value_array[0], value_array[1]])
+                chk_r = ctypes.c_ushort((value_array[3] << 8 | value_array[2])).value
 
-    def analog_write(self, pin, value):
+                if chk != chk_r:
+                    # print "analog_read(%d) -> %x  chk= %x  chk_r= %x" % (pin, addr, chk, chk_r)
+                    raise ValueError('checksum error')
+                retry = -1
+            except Exception as e:
+                # print "test execption " + e.__class__.__name__
+                self.handle_exeception(e)
+                retry -= 1
+                pass
+        self.mutex.release()
+
+        if retry == 0:
+            raise ValueError('Could not get values')
+
+        value = ctypes.c_long(value_array[1] << 8 | value_array[0]).value
+        # print "analog_read(%d) -> %d" % (pin, value)
+
+        return value
+
+    def  analog_write(self, pin, value):
         return True
 
     def digital_read(self, pin):
