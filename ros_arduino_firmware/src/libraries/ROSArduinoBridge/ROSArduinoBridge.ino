@@ -135,6 +135,9 @@
 
 #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
   #include <Wire.h>
+/*
+  #include <AnalogScanner.h>
+*/
   #include "I2C.h"
 #endif
 
