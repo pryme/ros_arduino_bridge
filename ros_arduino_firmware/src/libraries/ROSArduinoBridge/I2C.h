@@ -222,7 +222,7 @@ static AnalogScanner scanner;
 static void i2c_get_analog_values() {
   if (millis() > next_analog_read_time) {
     for (int i = 0; i < ANALOG_NUM; i++) {
-      unsigned int v = scanner.getValue(i);
+      unsigned int v = analogRead(i);
       unsigned char addr = 0x58 + i * 2;
 
       i2c_buffer[addr    ] =  v        & 0xff;
