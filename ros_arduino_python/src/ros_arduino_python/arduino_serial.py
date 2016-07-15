@@ -35,7 +35,7 @@ class ArduinoSerial(Arduino):
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self.write_timeout = None
+        self.write_timeout = write_timeout
         self.interCharTimeout = timeout / 30.
         self.base_init()
 

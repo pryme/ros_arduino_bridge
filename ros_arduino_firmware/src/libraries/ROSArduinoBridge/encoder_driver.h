@@ -20,7 +20,7 @@
 
   #define RIGHT_ENC_PIN_XOR 7  // D7
   #define RIGHT_ENC_PIN_B   5  // D5
- #endif
+ #else
   // Alternate pin definitions for using the EnableInterrupt library for
   // using pin-change interrupts. All these pins are capable of either
   // hardware interrupts or pin-change interrupts (or both) on the A-Star.
@@ -33,6 +33,7 @@
   #define LEFT_ENC_PIN_B    11
   #define RIGHT_ENC_PIN_A   16
   #define RIGHT_ENC_PIN_B   15
+ #endif // USE_ENABLE_INTERRUPT
 #endif
 
 void initEncoder();

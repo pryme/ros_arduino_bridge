@@ -50,7 +50,6 @@
 
 #define SERIAL_STREAM Serial
 #define DEBUG_SERIAL_STREAM Serial
-//#define USE_I2C
 
 /* Define the motor controller and encoder library you are using */
 #ifdef USE_BASE
