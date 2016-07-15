@@ -246,12 +246,15 @@ int runCommand() {
     #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
     if (arg1 == ASTAR_YELLOW_LED_PIN) {
       ledYellow(arg2);
+      SERIAL_STREAM.println("OK"); 
       break;
     } else if (arg1 == ASTAR_GREEN_LED_PIN) {
       ledGreen(arg2);
+      SERIAL_STREAM.println("OK"); 
       break;
     } else if (arg1 == ASTAR_RED_LED_PIN) {
       ledRed(arg2);
+      SERIAL_STREAM.println("OK"); 
       break;
     }
     #endif
