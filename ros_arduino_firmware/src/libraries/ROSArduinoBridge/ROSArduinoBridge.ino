@@ -48,6 +48,10 @@
 #define USE_BASE      // Enable the base controller code
 //#undef USE_BASE     // Disable the base controller code
 
+#define SERIAL_STREAM Serial
+#define DEBUG_SERIAL_STREAM Serial
+//#define USE_I2C
+
 /* Define the motor controller and encoder library you are using */
 #ifdef USE_BASE
    /* The Pololu VNH5019 dual motor driver shield */
@@ -185,51 +189,51 @@ int runCommand() {
 
   switch(cmd) {
   case GET_BAUDRATE:
-    Serial.println(BAUDRATE);
+    SERIAL_STREAM.println(BAUDRATE);
     break;
   case ANALOG_READ:
-    Serial.println(analogRead(arg1));
+    SERIAL_STREAM.println(analogRead(arg1));
     break;
   case DIGITAL_READ:
-    Serial.println(digitalRead(arg1));
+    SERIAL_STREAM.println(digitalRead(arg1));
     break;
   case ANALOG_WRITE:
     analogWrite(arg1, arg2);
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case DIGITAL_WRITE:
     if (arg2 == 0) digitalWrite(arg1, LOW);
     else if (arg2 == 1) digitalWrite(arg1, HIGH);
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case PIN_MODE:
     if (arg2 == 0) pinMode(arg1, INPUT);
     else if (arg2 == 1) pinMode(arg1, OUTPUT);
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case PING:
-    Serial.println(Ping(arg1));
+    SERIAL_STREAM.println(Ping(arg1));
     break;
 #ifdef USE_SERVOS
   case SERVO_WRITE:
     servos[arg1].setTargetPosition(arg2);
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case SERVO_READ:
-    Serial.println(servos[arg1].getServo().read());
+    SERIAL_STREAM.println(servos[arg1].getServo().read());
     break;
 #endif
 
 #ifdef USE_BASE
   case READ_ENCODERS:
-    Serial.print(readEncoder(LEFT));
-    Serial.print(" ");
-    Serial.println(readEncoder(RIGHT));
+    SERIAL_STREAM.print(readEncoder(LEFT));
+    SERIAL_STREAM.print(" ");
+    SERIAL_STREAM.println(readEncoder(RIGHT));
     break;
    case RESET_ENCODERS:
     resetEncoders();
     resetPID();
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case MOTOR_SPEEDS:
     /* Reset the auto stop timer */
@@ -241,7 +245,7 @@ int runCommand() {
     else moving = 1;
     leftPID.TargetTicksPerFrame = arg1;
     rightPID.TargetTicksPerFrame = arg2;
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case UPDATE_PID:
     while ((str = strtok_r(p, ":", &p)) != '\0') {
@@ -252,11 +256,11 @@ int runCommand() {
     Kd = pid_args[1];
     Ki = pid_args[2];
     Ko = pid_args[3];
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
 #endif
   default:
-    Serial.println("Invalid Command");
+    SERIAL_STREAM.println("Invalid Command");
     break;
   }
 }
@@ -267,7 +271,10 @@ void setup() {
   initI2c();
 #endif
 
-  Serial.begin(BAUDRATE);
+  SERIAL_STREAM.begin(BAUDRATE);
+  while (!SERIAL_STREAM) {
+    // do nothing
+  }
 
 // Initialize the motor controller if used */
 #ifdef USE_BASE
@@ -293,10 +300,10 @@ void setup() {
    interval and check for auto-stop conditions.
 */
 void loop() {
-  while (Serial.available() > 0) {
+  while (SERIAL_STREAM.available() > 0) {
 
     // Read the next character
-    chr = Serial.read();
+    chr = SERIAL_STREAM.read();
 
     // Terminate a command with a CR
     if (chr == 13) {
