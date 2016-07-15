@@ -61,6 +61,7 @@
 
    /* The A-Star 32U4 Robot Controller LV with Raspberry Pi Bridge */
    #define POLOLU_ASTAR_ROBOT_CONTROLLER
+   //#define USE_ENABLE_INTERRUPT
 
    /* The RoboGaia encoder shield */
    //#define ROBOGAIA
@@ -81,10 +82,11 @@
 /* Maximum PWM signal */
 #define MAX_PWM        255
 
-/* MARCO: The POLOLU_DRV8835 has a range +/- 400, but I'm running 6V motors
-   on 7.4V batteries, so I limit it here to 6/7.4 * 400
-*/
-#define MAX_PWM        325
+// merose: The A-Star has a PWM range of +/- 400 for the motors. Pololu
+// calls them 6V motors, so Marco originally reduced the maximum PWM
+// based on using 7.4V batteries. But Ray looked up the motor specs and
+// found they are rated to 12V, so we'll use the maximum PWM available.
+#define MAX_PWM        400
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
