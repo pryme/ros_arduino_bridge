@@ -140,11 +140,34 @@
 #endif
 
 #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+  #include <AStar32U4.h>
   #include <Wire.h>
 /*
   #include <AnalogScanner.h>
 */
   #include "I2C.h"
+
+  // Fake pin numbers for A-Star-specific I/O features. These pins will
+  // be emulated as digital or analog I/O pins in runCommand(), below.
+
+  // A-Star buttons as digital input pins.
+  #define ASTAR_BTN_A_PIN      100
+  #define ASTAR_BTN_B_PIN      101
+  #define ASTAR_BTN_C_PIN      102
+
+  // A-Star LEDs as digital output pins.
+  #define ASTAR_YELLOW_LED_PIN 103
+  #define ASTAR_GREEN_LED_PIN  104
+  #define ASTAR_RED_LED_PIN    105
+
+  // A-Star Battery voltage as an analog input pin.
+  #define ASTAR_BATTERY_PIN    106
+  
+  // These objects provide access to the A-Star's on-board
+  // buttons.
+  AStar32U4ButtonA buttonA;
+  AStar32U4ButtonB buttonB;
+  AStar32U4ButtonC buttonC;
 #endif
 
 /* Variable initialization */
@@ -192,9 +215,27 @@ int runCommand() {
     SERIAL_STREAM.println(BAUDRATE);
     break;
   case ANALOG_READ:
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_BATTERY_PIN) {
+      SERIAL_STREAM.println(readBatteryMillivoltsLV());
+      break;
+    }
+    #endif
     SERIAL_STREAM.println(analogRead(arg1));
     break;
   case DIGITAL_READ:
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_BTN_A_PIN) {
+      SERIAL_STREAM.println(buttonA.isPressed());
+      break;
+    } else if (arg1 == ASTAR_BTN_B_PIN) {
+      SERIAL_STREAM.println(buttonB.isPressed());
+      break;
+    } else if (arg1 == ASTAR_BTN_C_PIN) {
+      SERIAL_STREAM.println(buttonC.isPressed());
+      break;
+    }
+    #endif
     SERIAL_STREAM.println(digitalRead(arg1));
     break;
   case ANALOG_WRITE:
@@ -202,6 +243,18 @@ int runCommand() {
     SERIAL_STREAM.println("OK"); 
     break;
   case DIGITAL_WRITE:
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_YELLOW_LED_PIN) {
+      ledYellow(arg2);
+      break;
+    } else if (arg1 == ASTAR_GREEN_LED_PIN) {
+      ledGreen(arg2);
+      break;
+    } else if (arg1 == ASTAR_RED_LED_PIN) {
+      ledRed(arg2);
+      break;
+    }
+    #endif
     if (arg2 == 0) digitalWrite(arg1, LOW);
     else if (arg2 == 1) digitalWrite(arg1, HIGH);
     SERIAL_STREAM.println("OK"); 
