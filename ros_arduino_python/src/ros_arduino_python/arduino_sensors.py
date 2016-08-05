@@ -228,6 +228,34 @@ class GP2D12(IRSensor):
         
         return distance
     
+class GP2Y0A60(IRSensor):
+    def __init__(self, *args, **kwargs):
+        super(GP2Y0A60, self).__init__(*args, **kwargs)
+
+        self.msg.field_of_view = 0.001
+        self.msg.min_range = 0.10
+        self.msg.max_range = 1.50
+
+    def read_value(self):
+        value = self.controller.analog_read(self.pin)
+
+        if value <= 130.0:
+            return self.msg.max_range
+
+        if value >= 750.0:
+            return self.msg.min_range
+
+        try:
+            distance = 1877.54 / (float(value - 25) ** 1.53)
+        except:
+            return self.msg.max_range
+
+        # If we get a spurious reading, set it to the max_range
+        if distance > self.msg.max_range: distance = self.msg.max_range
+        if distance < self.msg.min_range: distance = self.msg.min_range
+
+        return distance
+
 class PololuMotorCurrent(AnalogFloatSensor):
     def __init__(self, *args, **kwargs):
         super(PololuMotorCurrent, self).__init__(*args, **kwargs)
@@ -273,4 +301,4 @@ class MaxEZ1Sensor(SonarSensor):
 if __name__ == '__main__':
     myController = Controller()
     mySensor = SonarSensor(myController, "My Sonar", type=Type.PING, pin=0, rate=10)
-            
+

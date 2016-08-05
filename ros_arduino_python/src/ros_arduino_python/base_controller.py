@@ -23,6 +23,8 @@
 import roslib; roslib.load_manifest('ros_arduino_python')
 import rospy
 import os
+import sys
+import traceback
 
 from math import sin, cos, pi
 from geometry_msgs.msg import Quaternion, Twist, Pose
@@ -68,7 +70,7 @@ class BaseController:
         self.t_delta = rospy.Duration(1.0 / self.rate)
         self.t_next = now + self.t_delta
 
-        # internal data        
+        # Internal data        
         self.enc_left = None            # encoder readings
         self.enc_right = None
         self.x = 0                      # position in xy plane
@@ -80,7 +82,7 @@ class BaseController:
         self.v_des_right = 0
         self.last_cmd_vel = now
 
-        # subscriptions
+        # Subscriptions
         rospy.Subscriber("cmd_vel", Twist, self.cmdVelCallback)
         
         # Clear any old odometry info
@@ -122,16 +124,17 @@ class BaseController:
             # Read the encoders
             try:
                 left_enc, right_enc = self.arduino.get_encoder_counts()
-            except:
+            except Exception as e:
                 self.bad_encoder_count += 1
-                rospy.logerr("Encoder exception count: " + str(self.bad_encoder_count))
+                rospy.logerr("Encoder exception count: " + str(self.bad_encoder_count) + "  now: " + e.__class__.__name__)
+                rospy.logerr("mw stack trace: " + traceback.format_exc())
                 return
-                            
+
             dt = now - self.then
             self.then = now
             dt = dt.to_sec()
             
-            # calculate odometry
+            # Calculate odometry
             if self.enc_left == None:
                 dright = 0
                 dleft = 0
@@ -238,10 +241,3 @@ class BaseController:
             
         self.v_des_left = int(left * self.ticks_per_meter / self.arduino.PID_RATE)
         self.v_des_right = int(right * self.ticks_per_meter / self.arduino.PID_RATE)
-        
-
-        
-
-    
-
-    

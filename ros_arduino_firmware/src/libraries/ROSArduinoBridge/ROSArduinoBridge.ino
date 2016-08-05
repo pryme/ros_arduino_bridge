@@ -1,20 +1,20 @@
 /*********************************************************************
  *  ROSArduinoBridge
- 
+
     A set of simple serial commands to control a differential drive
-    robot and receive back sensor and odometry data. Default 
+    robot and receive back sensor and odometry data. Default
     configuration assumes use of an Arduino Mega + Pololu motor
     controller shield + Robogaia Mega Encoder shield.  Edit the
-    readEncoder() and setMotorSpeed() wrapper functions if using 
+    readEncoder() and setMotorSpeed() wrapper functions if using
     different motor controller or encoder method.
 
     Created for the Pi Robot Project: http://www.pirobot.org
     and the Home Brew Robotics Club (HBRC): http://hbrobotics.org
-    
+
     Authors: Patrick Goebel, James Nugen
 
     Inspired and modeled after the ArbotiX driver by Michael Ferguson
-    
+
     Software License Agreement (BSD License)
 
     Copyright (c) 2012, Patrick Goebel.
@@ -45,32 +45,51 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-//#define USE_BASE      // Enable the base controller code
-#undef USE_BASE     // Disable the base controller code
+#define USE_BASE      // Enable the base controller code
+//#undef USE_BASE     // Disable the base controller code
+
+#define SERIAL_STREAM Serial
+#define DEBUG_SERIAL_STREAM Serial
 
 /* Define the motor controller and encoder library you are using */
 #ifdef USE_BASE
    /* The Pololu VNH5019 dual motor driver shield */
-   #define POLOLU_VNH5019
+   //#define POLOLU_VNH5019
 
    /* The Pololu MC33926 dual motor driver shield */
    //#define POLOLU_MC33926
 
+   /* The Pololu DRV8835 dual motor driver shield */
+   // #define POLOLU_DRV8835
+
+   /* The A-Star 32U4 Robot Controller LV with Raspberry Pi Bridge */
+   #define POLOLU_ASTAR_ROBOT_CONTROLLER
+   //#define USE_ENABLE_INTERRUPT
+
    /* The RoboGaia encoder shield */
-   #define ROBOGAIA
-   
+   //#define ROBOGAIA
+
    /* Encoders directly attached to Arduino board */
-   //#define ARDUINO_ENC_COUNTER
+   // #define ARDUINO_ENC_COUNTER
+
+   /* The RedBot encoder */
+   // #define SPARKFUN_REDBOT_ENCODER
 #endif
 
-#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
-//#undef USE_SERVOS     // Disable use of PWM servos
+//#define USE_SERVOS  // Enable use of PWM servos as defined in servos.h
+#undef USE_SERVOS     // Disable use of PWM servos
 
 /* Serial port baud rate */
-#define BAUDRATE     57600
+#define BAUDRATE     115200
 
 /* Maximum PWM signal */
 #define MAX_PWM        255
+
+// merose: The A-Star has a PWM range of +/- 400 for the motors. Pololu
+// calls them 6V motors, so Marco originally reduced the maximum PWM
+// based on using 7.4V batteries. But Ray looked up the motor specs and
+// found they are rated to 12V, so we'll use the maximum PWM available.
+#define MAX_PWM        400
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -83,6 +102,10 @@
 
 /* Sensor functions */
 #include "sensors.h"
+
+#if defined(SPARKFUN_REDBOT_ENCODER)
+#include "RedBot.h"
+#endif
 
 /* Include servo support if required */
 #ifdef USE_SERVOS
@@ -105,7 +128,7 @@
 
   /* Convert the rate into an interval */
   const int PID_INTERVAL = 1000 / PID_RATE;
-  
+
   /* Track the next time we make a PID calculation */
   unsigned long nextPID = PID_INTERVAL;
 
@@ -113,6 +136,37 @@
    in this number of milliseconds */
   #define AUTO_STOP_INTERVAL 2000
   long lastMotorCommand = AUTO_STOP_INTERVAL;
+#endif
+
+#ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+  #include <AStar32U4.h>
+  #include <Wire.h>
+/*
+  #include <AnalogScanner.h>
+*/
+  #include "I2C.h"
+
+  // Fake pin numbers for A-Star-specific I/O features. These pins will
+  // be emulated as digital or analog I/O pins in runCommand(), below.
+
+  // A-Star buttons as digital input pins.
+  #define ASTAR_BTN_A_PIN      100
+  #define ASTAR_BTN_B_PIN      101
+  #define ASTAR_BTN_C_PIN      102
+
+  // A-Star LEDs as digital output pins.
+  #define ASTAR_YELLOW_LED_PIN 103
+  #define ASTAR_GREEN_LED_PIN  104
+  #define ASTAR_RED_LED_PIN    105
+
+  // A-Star Battery voltage as an analog input pin.
+  #define ASTAR_BATTERY_PIN    106
+  
+  // These objects provide access to the A-Star's on-board
+  // buttons.
+  AStar32U4ButtonA buttonA;
+  AStar32U4ButtonB buttonB;
+  AStar32U4ButtonC buttonC;
 #endif
 
 /* Variable initialization */
@@ -154,54 +208,87 @@ int runCommand() {
   int pid_args[4];
   arg1 = atoi(argv1);
   arg2 = atoi(argv2);
-  
+
   switch(cmd) {
   case GET_BAUDRATE:
-    Serial.println(BAUDRATE);
+    SERIAL_STREAM.println(BAUDRATE);
     break;
   case ANALOG_READ:
-    Serial.println(analogRead(arg1));
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_BATTERY_PIN) {
+      SERIAL_STREAM.println(readBatteryMillivoltsLV());
+      break;
+    }
+    #endif
+    SERIAL_STREAM.println(analogRead(arg1));
     break;
   case DIGITAL_READ:
-    Serial.println(digitalRead(arg1));
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_BTN_A_PIN) {
+      SERIAL_STREAM.println(buttonA.isPressed());
+      break;
+    } else if (arg1 == ASTAR_BTN_B_PIN) {
+      SERIAL_STREAM.println(buttonB.isPressed());
+      break;
+    } else if (arg1 == ASTAR_BTN_C_PIN) {
+      SERIAL_STREAM.println(buttonC.isPressed());
+      break;
+    }
+    #endif
+    SERIAL_STREAM.println(digitalRead(arg1));
     break;
   case ANALOG_WRITE:
     analogWrite(arg1, arg2);
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case DIGITAL_WRITE:
+    #ifdef POLOLU_ASTAR_ROBOT_CONTROLLER
+    if (arg1 == ASTAR_YELLOW_LED_PIN) {
+      ledYellow(arg2);
+      SERIAL_STREAM.println("OK"); 
+      break;
+    } else if (arg1 == ASTAR_GREEN_LED_PIN) {
+      ledGreen(arg2);
+      SERIAL_STREAM.println("OK"); 
+      break;
+    } else if (arg1 == ASTAR_RED_LED_PIN) {
+      ledRed(arg2);
+      SERIAL_STREAM.println("OK"); 
+      break;
+    }
+    #endif
     if (arg2 == 0) digitalWrite(arg1, LOW);
     else if (arg2 == 1) digitalWrite(arg1, HIGH);
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case PIN_MODE:
     if (arg2 == 0) pinMode(arg1, INPUT);
     else if (arg2 == 1) pinMode(arg1, OUTPUT);
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case PING:
-    Serial.println(Ping(arg1));
+    SERIAL_STREAM.println(Ping(arg1));
     break;
 #ifdef USE_SERVOS
   case SERVO_WRITE:
     servos[arg1].setTargetPosition(arg2);
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case SERVO_READ:
-    Serial.println(servos[arg1].getServo().read());
+    SERIAL_STREAM.println(servos[arg1].getServo().read());
     break;
 #endif
-    
+
 #ifdef USE_BASE
   case READ_ENCODERS:
-    Serial.print(readEncoder(LEFT));
-    Serial.print(" ");
-    Serial.println(readEncoder(RIGHT));
+    SERIAL_STREAM.print(readEncoder(LEFT));
+    SERIAL_STREAM.print(" ");
+    SERIAL_STREAM.println(readEncoder(RIGHT));
     break;
    case RESET_ENCODERS:
     resetEncoders();
     resetPID();
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
   case MOTOR_SPEEDS:
     /* Reset the auto stop timer */
@@ -213,7 +300,7 @@ int runCommand() {
     else moving = 1;
     leftPID.TargetTicksPerFrame = arg1;
     rightPID.TargetTicksPerFrame = arg2;
-    Serial.println("OK"); 
+    SERIAL_STREAM.println("OK"); 
     break;
   case UPDATE_PID:
     while ((str = strtok_r(p, ":", &p)) != '\0') {
@@ -224,42 +311,29 @@ int runCommand() {
     Kd = pid_args[1];
     Ki = pid_args[2];
     Ko = pid_args[3];
-    Serial.println("OK");
+    SERIAL_STREAM.println("OK");
     break;
 #endif
   default:
-    Serial.println("Invalid Command");
+    SERIAL_STREAM.println("Invalid Command");
     break;
   }
 }
 
 /* Setup function--runs once at startup. */
 void setup() {
-  Serial.begin(BAUDRATE);
+#ifdef USE_I2C
+  initI2c();
+#endif
+
+  SERIAL_STREAM.begin(BAUDRATE);
+  while (!SERIAL_STREAM) {
+    // do nothing
+  }
 
 // Initialize the motor controller if used */
 #ifdef USE_BASE
-  #ifdef ARDUINO_ENC_COUNTER
-    //set as inputs
-    DDRD &= ~(1<<LEFT_ENC_PIN_A);
-    DDRD &= ~(1<<LEFT_ENC_PIN_B);
-    DDRC &= ~(1<<RIGHT_ENC_PIN_A);
-    DDRC &= ~(1<<RIGHT_ENC_PIN_B);
-    
-    //enable pull up resistors
-    PORTD |= (1<<LEFT_ENC_PIN_A);
-    PORTD |= (1<<LEFT_ENC_PIN_B);
-    PORTC |= (1<<RIGHT_ENC_PIN_A);
-    PORTC |= (1<<RIGHT_ENC_PIN_B);
-    
-    // tell pin change mask to listen to left encoder pins
-    PCMSK2 |= (1 << LEFT_ENC_PIN_A)|(1 << LEFT_ENC_PIN_B);
-    // tell pin change mask to listen to right encoder pins
-    PCMSK1 |= (1 << RIGHT_ENC_PIN_A)|(1 << RIGHT_ENC_PIN_B);
-    
-    // enable PCINT1 and PCINT2 interrupt in the general interrupt mask
-    PCICR |= (1 << PCIE1) | (1 << PCIE2);
-  #endif
+  initEncoder();
   initMotorController();
   resetPID();
 #endif
@@ -281,10 +355,10 @@ void setup() {
    interval and check for auto-stop conditions.
 */
 void loop() {
-  while (Serial.available() > 0) {
-    
+  while (SERIAL_STREAM.available() > 0) {
+
     // Read the next character
-    chr = Serial.read();
+    chr = SERIAL_STREAM.read();
 
     // Terminate a command with a CR
     if (chr == 13) {
@@ -320,14 +394,18 @@ void loop() {
       }
     }
   }
-  
+
+#ifdef USE_I2C
+  runI2c();
+#endif
+
 // If we are using base control, run a PID calculation at the appropriate intervals
 #ifdef USE_BASE
   if (millis() > nextPID) {
     updatePID();
     nextPID += PID_INTERVAL;
   }
-  
+
   // Check to see if we have exceeded the auto-stop interval
   if ((millis() - lastMotorCommand) > AUTO_STOP_INTERVAL) {;
     setMotorSpeeds(0, 0);
